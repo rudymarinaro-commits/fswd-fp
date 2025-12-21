@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+
+  roomsAsUser1 Room[] @relation("User1Rooms")
+  roomsAsUser2 Room[] @relation("User2Rooms")
+  messages     Message[]
+}
+
+model Room {
+  id        Int      @id @default(autoincrement())
+  user1Id  Int
+  user2Id  Int
+  createdAt DateTime @default(now())
+
+  user1 User @relation("User1Rooms", fields: [user1Id], references: [id])
+  user2 User @relation("User2Rooms", fields: [user2Id], references: [id])
+
+  messages Message[]
+
+  @@unique([user1Id, user2Id])
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  content   String
+  senderId  Int
+  roomId    Int
+  createdAt DateTime @default(now())
+
+  sender User @relation(fields: [senderId], references: [id])
+  room   Room @relation(fields: [roomId], references: [id])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
