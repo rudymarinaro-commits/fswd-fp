@@ -1,18 +1,16 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import { sign, SignOptions } from "jsonwebtoken";
-import { env } from "../config/env";
 import { PrismaClient } from "@prisma/client";
 
-const jwtSecret = process.env.JWT_SECRET;
-
-if (!jwtSecret) {
-    throw new Error("JWT_SECRET is not defined");
-}
-
+import { env } from "../config/env";
+import { AuthRequest } from "../middlewares/auth.middleware";
 
 const prisma = new PrismaClient();
 
+/**
+ * POST /auth/login
+ */
 export async function login(req: Request, res: Response) {
     const { email, password } = req.body;
 
@@ -47,7 +45,26 @@ export async function login(req: Request, res: Response) {
         signOptions
     );
 
-
-
     return res.json({ token });
+}
+
+/**
+ * GET /auth/me
+ */
+export async function me(req: AuthRequest, res: Response) {
+    if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const user = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+        select: {
+            id: true,
+            email: true,
+            role: true,
+            createdAt: true,
+        },
+    });
+
+    return res.json(user);
 }
