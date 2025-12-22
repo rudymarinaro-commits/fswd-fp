@@ -8,14 +8,14 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
 
-  roomsAsUser1 Room[] @relation("User1Rooms")
-  roomsAsUser2 Room[] @relation("User2Rooms")
+  roomsAsUser1 Room[]   @relation("User1Rooms")
+  roomsAsUser2 Room[]   @relation("User2Rooms")
   messages     Message[]
 }
 
