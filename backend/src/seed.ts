@@ -8,7 +8,11 @@ async function main() {
     const adminEmail = "admin@example.com";
     const adminPassword = "Admin123!";
 
+    const userEmail = "user@example.com";
+    const userPassword = "User123!";
+
     const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
+    const userPasswordHash = await bcrypt.hash(userPassword, 10);
 
     const admin = await prisma.user.upsert({
         where: { email: adminEmail },
@@ -20,17 +24,13 @@ async function main() {
         },
     });
 
-    const userEmail = "user@example.com";
-    const userPassword = "User123!";
-
-    const userPasswordHash = await bcrypt.hash(userPassword, 10);
-
     const user = await prisma.user.upsert({
         where: { email: userEmail },
         update: {},
         create: {
             email: userEmail,
             passwordHash: userPasswordHash,
+            role: "USER",
         },
     });
 
@@ -41,8 +41,8 @@ async function main() {
 }
 
 main()
-    .catch((e) => {
-        console.error("❌ Seed error:", e);
+    .catch((err) => {
+        console.error("❌ Seed error:", err);
         process.exit(1);
     })
     .finally(async () => {
