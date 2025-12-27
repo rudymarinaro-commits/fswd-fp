@@ -8,8 +8,3 @@ export const env = {
 if (!env.jwtSecret) {
     throw new Error("JWT_SECRET is not defined");
 }
-
-
-if (!env.jwtSecret) {
-    throw new Error("JWT_SECRET is not defined");
-}
