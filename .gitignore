@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+
+# env
+.env
+.env.*
+!.env.example
+
+# build
+dist/
+build/
+
+# mac
+.DS_Store
