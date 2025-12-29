@@ -1,8 +1,8 @@
-import { useState, ReactNode } from "react";
-import { AuthContext } from "./AuthContext";
+import { useState } from "react";
+import { AuthContext, AuthContextType } from "./AuthContext";
 
 type Props = {
-  children: ReactNode;
+  children: React.ReactNode;
 };
 
 export function AuthProvider({ children }: Props) {
@@ -11,23 +11,18 @@ export function AuthProvider({ children }: Props) {
   );
 
   async function login(email: string, password: string): Promise<boolean> {
-    try {
-      const res = await fetch("http://localhost:3000/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+    const res = await fetch("http://localhost:3000/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
 
-      if (!res.ok) return false;
+    if (!res.ok) return false;
 
-      const data = await res.json();
-
-      setToken(data.token);
-      localStorage.setItem("token", data.token);
-      return true;
-    } catch {
-      return false;
-    }
+    const data = await res.json();
+    setToken(data.token);
+    localStorage.setItem("token", data.token);
+    return true;
   }
 
   function logout() {
@@ -35,9 +30,7 @@ export function AuthProvider({ children }: Props) {
     localStorage.removeItem("token");
   }
 
-  return (
-    <AuthContext.Provider value={{ token, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value: AuthContextType = { token, login, logout };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
