@@ -12,7 +12,9 @@ export const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  console.log("🟢 Client connected:", socket.id);
+  if (process.env.NODE_ENV !== "test") {
+    console.log("🟢 Client connected:", socket.id);
+  }
 
   socket.on("joinRoom", (roomId: number) => {
     socket.join(`room:${roomId}`);
