@@ -12,3 +12,6 @@ build/
 
 # mac
 .DS_Store
+
+.vite
+.prisma/client

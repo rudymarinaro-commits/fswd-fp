@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   email        String   @unique
@@ -21,30 +26,25 @@ model User {
 
 model Room {
   id        Int      @id @default(autoincrement())
-  user1Id  Int
-  user2Id  Int
   createdAt DateTime @default(now())
+
+  user1Id Int
+  user2Id Int
 
   user1 User @relation("User1Rooms", fields: [user1Id], references: [id])
   user2 User @relation("User2Rooms", fields: [user2Id], references: [id])
 
   messages Message[]
-
-  @@unique([user1Id, user2Id])
 }
 
 model Message {
   id        Int      @id @default(autoincrement())
   content   String
-  senderId  Int
-  roomId    Int
   createdAt DateTime @default(now())
 
-  sender User @relation(fields: [senderId], references: [id])
-  room   Room @relation(fields: [roomId], references: [id])
-}
+  userId Int
+  roomId Int
 
-enum Role {
-  USER
-  ADMIN
+  user User @relation(fields: [userId], references: [id])
+  room Room @relation(fields: [roomId], references: [id])
 }
