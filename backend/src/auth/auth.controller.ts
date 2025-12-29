@@ -5,6 +5,7 @@ import { PrismaClient } from "@prisma/client";
 import { loginSchema } from "./auth.schemas";
 import { env } from "../config/env";
 import { AuthRequest } from "../middlewares/auth.middleware";
+import { logger } from "../services/logger";
 
 const prisma = new PrismaClient();
 
@@ -16,6 +17,7 @@ export async function login(req: Request, res: Response) {
     const parsed = loginSchema.safeParse(req.body);
 
     if (!parsed.success) {
+      logger.warn("Invalid login input", parsed.error.flatten());
       return res
         .status(400)
         .json({ message: "Invalid input", errors: parsed.error.flatten() });
@@ -23,17 +25,17 @@ export async function login(req: Request, res: Response) {
 
     const { email, password } = parsed.data;
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+    const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
+      logger.info("Login failed: user not found", { email });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordMatch) {
+      logger.info("Login failed: wrong password", { userId: user.id });
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -42,18 +44,16 @@ export async function login(req: Request, res: Response) {
     };
 
     const token = sign(
-      {
-        userId: user.id,
-        role: user.role,
-      },
+      { userId: user.id, role: user.role },
       env.jwtSecret,
       signOptions
     );
 
+    logger.info("User logged in", { userId: user.id });
+
     return res.json({ token });
   } catch (err) {
-    // risposta controllata in caso di eccezioni
-    // non esporre dettagli interni e mantenere risposta consistente.
+    logger.error("Unexpected login error", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -62,8 +62,6 @@ export async function login(req: Request, res: Response) {
  * GET /auth/me
  */
 export async function me(req: AuthRequest, res: Response) {
-  //  wrap in try/catch per gestire errori inattesi (DB error, ecc.)
-  //  mantenere comportamento stabile e risposta 500 controllata.
   try {
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -81,8 +79,7 @@ export async function me(req: AuthRequest, res: Response) {
 
     return res.json(user);
   } catch (err) {
-    // risposta controllata in caso di eccezioni
-    // evitare crash
+    logger.error("Error fetching /me", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
