@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { authMiddleware } from "../middlewares/auth.middleware";
-import * as controller from "./rooms.controller";
+import { requireAuth } from "../middlewares/auth.middleware";
+import { createRoom, getMyRooms } from "./rooms.controller";
 
 const router = Router();
 
-router.post("/", authMiddleware, controller.createRoom);
-router.get("/", authMiddleware, controller.getMyRooms);
+router.get("/", requireAuth, getMyRooms);
+router.post("/", requireAuth, createRoom);
 
 export default router;

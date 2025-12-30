@@ -1,13 +1,9 @@
 import { Router } from "express";
-import { authMiddleware } from "../middlewares/auth.middleware";
-import { requireAdmin } from "../middlewares/requireAdmin.middleware";
+import { requireAuth, requireAdmin } from "../middlewares/auth.middleware";
+import * as adminController from "./admin.controller";
 
 const router = Router();
 
-router.get("/stats", authMiddleware, requireAdmin, (_req, res) => {
-    res.json({
-        message: "Admin access granted",
-    });
-});
+router.get("/stats", requireAuth, requireAdmin, adminController.getStats);
 
 export default router;

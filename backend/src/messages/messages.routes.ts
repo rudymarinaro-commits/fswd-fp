@@ -1,10 +1,13 @@
 import { Router } from "express";
-import { authMiddleware } from "../middlewares/auth.middleware";
-import * as controller from "./messages.controller";
+import { requireAuth } from "../middlewares/auth.middleware";
+import { createMessage, getRoomMessages } from "./messages.controller";
 
 const router = Router();
 
-router.post("/", authMiddleware, controller.sendMessage);
-router.get("/:roomId", authMiddleware, controller.getMessages);
+// GET /messages/:roomId
+router.get("/:roomId", requireAuth, getRoomMessages);
+
+// POST /messages
+router.post("/", requireAuth, createMessage);
 
 export default router;

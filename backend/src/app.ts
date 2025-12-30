@@ -4,6 +4,7 @@ import authRoutes from "./auth/auth.routes";
 import adminRoutes from "./admin/admin.routes";
 import roomRoutes from "./rooms/rooms.routes";
 import messageRoutes from "./messages/messages.routes";
+import { errorHandler } from "./middlewares/error.middleware";
 
 const app = express();
 
@@ -22,6 +23,8 @@ app.use("/admin", adminRoutes);
 app.use("/rooms", roomRoutes);
 
 app.use("/messages", messageRoutes);
+
+app.use(errorHandler);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

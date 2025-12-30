@@ -34,15 +34,9 @@ export async function login(req: Request, res: Response) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const signOptions: SignOptions = {
+    const token = sign({ userId: user.id, role: user.role }, env.jwtSecret, {
       expiresIn: env.jwtExpiresIn,
-    };
-
-    const token = sign(
-      { userId: user.id, role: user.role },
-      env.jwtSecret,
-      signOptions
-    );
+    } satisfies SignOptions);
 
     logger.info({ userId: user.id }, "User logged in");
 
