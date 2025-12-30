@@ -9,18 +9,13 @@ import { logger } from "../services/logger";
 
 const prisma = new PrismaClient();
 
-/**
- * POST /auth/login
- */
 export async function login(req: Request, res: Response) {
   try {
     const parsed = loginSchema.safeParse(req.body);
 
     if (!parsed.success) {
-      logger.warn("Invalid login input", parsed.error.flatten());
-      return res
-        .status(400)
-        .json({ message: "Invalid input", errors: parsed.error.flatten() });
+      logger.warn({ errors: parsed.error.flatten() }, "Invalid login input");
+      return res.status(400).json({ message: "Invalid input" });
     }
 
     const { email, password } = parsed.data;
@@ -28,14 +23,14 @@ export async function login(req: Request, res: Response) {
     const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      logger.info("Login failed: user not found", { email });
+      logger.warn({ email }, "Login failed: user not found");
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const passwordMatch = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordMatch) {
-      logger.info("Login failed: wrong password", { userId: user.id });
+      logger.warn({ userId: user.id }, "Login failed: wrong password");
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -49,18 +44,15 @@ export async function login(req: Request, res: Response) {
       signOptions
     );
 
-    logger.info("User logged in", { userId: user.id });
+    logger.info({ userId: user.id }, "User logged in");
 
     return res.json({ token });
   } catch (err) {
-    logger.error("Unexpected login error", err);
+    logger.error({ err }, "Login error");
     return res.status(500).json({ message: "Internal server error" });
   }
 }
 
-/**
- * GET /auth/me
- */
 export async function me(req: AuthRequest, res: Response) {
   try {
     if (!req.user) {
@@ -69,17 +61,12 @@ export async function me(req: AuthRequest, res: Response) {
 
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
+      select: { id: true, email: true, role: true, createdAt: true },
     });
 
     return res.json(user);
   } catch (err) {
-    logger.error("Error fetching /me", err);
+    logger.error({ err }, "Me endpoint error");
     return res.status(500).json({ message: "Internal server error" });
   }
 }

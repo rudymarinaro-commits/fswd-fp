@@ -1,11 +1,12 @@
-export const logger = {
-  info: (message: string, meta?: unknown) => {
-    console.log(`[INFO] ${message}`, meta ?? "");
-  },
-  warn: (message: string, meta?: unknown) => {
-    console.warn(`[WARN] ${message}`, meta ?? "");
-  },
-  error: (message: string, meta?: unknown) => {
-    console.error(`[ERROR] ${message}`, meta ?? "");
-  },
-};
+import pino from "pino";
+
+export const logger = pino({
+  level: process.env.LOG_LEVEL || "info",
+  transport:
+    process.env.NODE_ENV !== "production"
+      ? {
+          target: "pino-pretty",
+          options: { colorize: true },
+        }
+      : undefined,
+});
