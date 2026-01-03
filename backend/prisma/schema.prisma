@@ -13,15 +13,16 @@ enum Role {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  username     String?   @unique
   passwordHash String
-  role         Role     @default(USER)
-  createdAt    DateTime @default(now())
-
-  roomsAsUser1 Room[]   @relation("User1Rooms")
-  roomsAsUser2 Room[]   @relation("User2Rooms")
+  role         Role      @default(USER)
+  createdAt    DateTime  @default(now())
   messages     Message[]
+
+  roomsAsUser1 Room[] @relation("RoomUser1")
+  roomsAsUser2 Room[] @relation("RoomUser2")
 }
 
 model Room {
@@ -31,8 +32,8 @@ model Room {
   user1Id Int
   user2Id Int
 
-  user1 User @relation("User1Rooms", fields: [user1Id], references: [id])
-  user2 User @relation("User2Rooms", fields: [user2Id], references: [id])
+  user1 User @relation("RoomUser1", fields: [user1Id], references: [id])
+  user2 User @relation("RoomUser2", fields: [user2Id], references: [id])
 
   messages Message[]
 }
@@ -41,8 +42,9 @@ model Message {
   id        Int      @id @default(autoincrement())
   content   String
   createdAt DateTime @default(now())
-  roomId    Int
-  userId    Int
+
+  roomId Int
+  userId Int
 
   room Room @relation(fields: [roomId], references: [id])
   user User @relation(fields: [userId], references: [id])

@@ -1,33 +1,16 @@
 import express from "express";
 import cors from "cors";
 import authRoutes from "./auth/auth.routes";
-import adminRoutes from "./admin/admin.routes";
-import roomRoutes from "./rooms/rooms.routes";
-import messageRoutes from "./messages/messages.routes";
-import { errorHandler } from "./middlewares/error.middleware";
+import roomsRoutes from "./rooms/rooms.routes";
+import messagesRoutes from "./messages/messages.routes";
+import usersRoutes from "./users/users.routes";
 
-const app = express();
+export const app = express();
 
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    credentials: true,
-  })
-);
-
+app.use(cors());
 app.use(express.json());
 
 app.use("/auth", authRoutes);
-app.use("/admin", adminRoutes);
-
-app.use("/rooms", roomRoutes);
-
-app.use("/messages", messageRoutes);
-
-app.use(errorHandler);
-
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
-});
-
-export default app;
+app.use("/rooms", roomsRoutes);
+app.use("/messages", messagesRoutes);
+app.use("/users", usersRoutes);

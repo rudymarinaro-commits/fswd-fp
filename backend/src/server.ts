@@ -1,10 +1,19 @@
-import "dotenv/config";
-import server from "./services/socket";
-import roomsRoutes from "./rooms/rooms.routes";
-import app from "./app";
+import http from "http";
+import { Server } from "socket.io";
+import { app } from "./app";
+import { env } from "./config/env";
+import { setupSocket } from "./services/socket";
 
-app.use("/rooms", roomsRoutes);
+const server = http.createServer(app);
 
-server.listen(3000, () => {
-  console.log("Server running on http://localhost:3000");
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+
+setupSocket(io);
+
+server.listen(env.port, () => {
+  console.log(`Server running on http://localhost:${env.port}`);
 });

@@ -1,9 +1,9 @@
-export type User = {
+export interface User {
   id: number;
   email: string;
-  role: "USER" | "ADMIN";
-  createdAt: string;
-};
+  username?: string | null;
+  role: string;
+}
 
 export type Room = {
   id: number;
