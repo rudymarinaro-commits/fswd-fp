@@ -1,10 +1,9 @@
 import { Router } from "express";
+import { getRoomMessages } from "./rooms.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { createRoom, getMyRooms } from "./rooms.controller";
 
 const router = Router();
 
-router.get("/", requireAuth, getMyRooms);
-router.post("/", requireAuth, createRoom);
+router.get("/:roomId/messages", requireAuth, getRoomMessages);
 
 export default router;

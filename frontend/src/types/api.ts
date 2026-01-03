@@ -1,16 +1,29 @@
-export interface LoginRequest {
+export type User = {
+  id: number;
   email: string;
-  password: string;
-}
+  role: "USER" | "ADMIN";
+  createdAt: string;
+};
 
-export interface LoginResponse {
-  token: string;
-}
+export type Room = {
+  id: number;
+  user1Id: number;
+  user2Id: number;
+  createdAt: string;
+};
 
-export interface MessageDTO {
+export type Message = {
   id: number;
   content: string;
   userId: number;
   roomId: number;
   createdAt: string;
-}
+};
+
+export type LoginResponse = {
+  token: string;
+};
+
+export type ApiError = {
+  message: string;
+};

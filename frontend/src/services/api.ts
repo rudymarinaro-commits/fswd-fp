@@ -1,35 +1,23 @@
 const API_URL = "http://localhost:3000";
 
-export async function fetchRooms(token: string) {
-  const res = await fetch(`${API_URL}/rooms`, {
+export async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {},
+  token?: string
+): Promise<T> {
+  const res = await fetch(API_URL + path, {
+    ...options,
     headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  return res.json();
-}
-
-export async function fetchMessages(token: string, roomId: number) {
-  const res = await fetch(`${API_URL}/messages/${roomId}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  return res.json();
-}
-
-export async function sendMessage(
-  token: string,
-  roomId: number,
-  content: string
-) {
-  const res = await fetch(`${API_URL}/messages`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
     },
-    body: JSON.stringify({ roomId, content }),
   });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || "API error");
+  }
+
   return res.json();
 }
