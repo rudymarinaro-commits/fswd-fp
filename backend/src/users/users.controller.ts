@@ -1,30 +1,25 @@
-import { Response } from "express";
-import { PrismaClient } from "@prisma/client";
-import { AuthRequest } from "../middlewares/auth.middleware";
-import { z } from "zod";
+import { Request, Response } from "express";
+import { prisma } from "../prisma";
 
-const prisma = new PrismaClient();
-
-const schema = z.object({
-  username: z.string().min(3).max(30),
-});
-
-export async function updateUsername(req: AuthRequest, res: Response) {
-  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ errors: parsed.error.flatten() });
-  }
-
+export async function listUsers(req: Request, res: Response) {
   try {
-    const user = await prisma.user.update({
-      where: { id: req.user.userId },
-      data: { username: parsed.data.username },
+    const meId = req.user!.id;
+
+    const users = await prisma.user.findMany({
+      where: { id: { not: meId } },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        role: true,
+        createdAt: true,
+      },
+      orderBy: [{ username: "asc" }, { email: "asc" }],
     });
 
-    res.json({ id: user.id, username: user.username });
-  } catch {
-    res.status(409).json({ message: "Username already taken" });
+    return res.json(users);
+  } catch (err) {
+    console.error("listUsers error", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
 }

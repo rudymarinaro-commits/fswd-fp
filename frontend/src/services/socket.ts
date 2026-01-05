@@ -1,8 +1,10 @@
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
 
-const URL = "http://localhost:3000";
-
-export const socket: Socket = io(URL, {
+export const socket = io("http://localhost:3000", {
   autoConnect: false,
-  withCredentials: true,
 });
+
+// helper per settare token prima di connect()
+export function setSocketToken(token: string) {
+  socket.auth = { token };
+}

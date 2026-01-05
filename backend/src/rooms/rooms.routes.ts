@@ -1,17 +1,10 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { requireRoomMember } from "../middlewares/requireRoomMember.middleware";
-import { getRoomMessages } from "./rooms.controller";
-import { createMessage } from "../messages/messages.controller";
+import { getMyRooms, getOrCreateDmRoom } from "./rooms.controller";
 
 const router = Router();
 
-router.get(
-  "/:roomId/messages",
-  requireAuth,
-  requireRoomMember,
-  getRoomMessages
-);
-router.post("/", requireAuth, requireRoomMember, createMessage);
+router.get("/rooms/my", requireAuth, getMyRooms);
+router.post("/rooms/dm", requireAuth, getOrCreateDmRoom);
 
 export default router;

@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { updateUsername } from "./users.controller";
+import { listUsers } from "./users.controller";
 
 const router = Router();
 
-router.patch("/me/username", requireAuth, updateUsername);
+router.get("/users", requireAuth, listUsers);
 
 export default router;

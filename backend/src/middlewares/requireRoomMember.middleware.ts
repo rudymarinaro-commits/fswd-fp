@@ -1,30 +1,23 @@
-import { Response, NextFunction } from "express";
-import { PrismaClient } from "@prisma/client";
-import { AuthRequest } from "./auth.middleware";
-
-const prisma = new PrismaClient();
+import { Request, Response, NextFunction } from "express";
+import { prisma } from "../prisma";
 
 export async function requireRoomMember(
-  req: AuthRequest,
+  req: Request,
   res: Response,
   next: NextFunction
 ) {
+  const userId = req.user!.id;
   const roomId = Number(req.params.roomId || req.body.roomId);
-  const userId = req.user?.userId;
 
-  if (!roomId || !userId) {
-    return res.status(400).json({ message: "Missing roomId or user" });
-  }
+  if (!roomId) return res.status(400).json({ error: "roomId required" });
 
-  const room = await prisma.room.findUnique({
-    where: { id: roomId },
-  });
-
-  if (!room) return res.status(404).json({ message: "Room not found" });
+  const room = await prisma.room.findUnique({ where: { id: roomId } });
+  if (!room) return res.status(404).json({ error: "Room not found" });
 
   if (room.user1Id !== userId && room.user2Id !== userId) {
-    return res.status(403).json({ message: "Not a member of this room" });
+    return res.status(403).json({ error: "Not a room member" });
   }
 
+  (req as any).room = room;
   next();
 }

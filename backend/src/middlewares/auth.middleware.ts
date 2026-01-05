@@ -1,43 +1,31 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { env } from "../config/env";
+import { prisma } from "../prisma";
 
-export interface AuthRequest extends Request {
-  user?: {
-    userId: number;
-    role: string;
-  };
-}
-
-export function requireAuth(
-  req: AuthRequest,
+export async function requireAuth(
+  req: Request,
   res: Response,
   next: NextFunction
 ) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Unauthorized" });
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Missing token" });
   }
 
   try {
-    const token = authHeader.split(" ")[1];
-    const payload = jwt.verify(token, env.jwtSecret) as AuthRequest["user"];
+    const token = header.slice(7);
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as {
+      userId: number;
+    };
 
-    req.user = payload;
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+    });
+    if (!user) return res.status(401).json({ error: "User not found" });
+
+    req.user = user;
     next();
   } catch {
-    return res.status(401).json({ message: "Invalid or expired token" });
+    return res.status(401).json({ error: "Invalid token" });
   }
-}
-
-export function requireAdmin(
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) {
-  if (req.user?.role !== "ADMIN") {
-    return res.status(403).json({ message: "Forbidden" });
-  }
-  next();
 }

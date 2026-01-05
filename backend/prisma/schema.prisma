@@ -1,51 +1,34 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
-}
-
-enum Role {
-  USER
-  ADMIN
-}
-
 model User {
-  id           Int       @id @default(autoincrement())
-  email        String    @unique
-  username     String?   @unique
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
   passwordHash String
-  role         Role      @default(USER)
-  createdAt    DateTime  @default(now())
+  role         Role     @default(USER)
   messages     Message[]
-
-  roomsAsUser1 Room[] @relation("RoomUser1")
-  roomsAsUser2 Room[] @relation("RoomUser2")
+  roomsAsUser1 Room[]  @relation("RoomUser1")
+  roomsAsUser2 Room[]  @relation("RoomUser2")
 }
 
 model Room {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
-
-  user1Id Int
-  user2Id Int
-
-  user1 User @relation("RoomUser1", fields: [user1Id], references: [id])
-  user2 User @relation("RoomUser2", fields: [user2Id], references: [id])
-
-  messages Message[]
+  user1Id   Int
+  user2Id   Int
+  user1     User     @relation("RoomUser1", fields: [user1Id], references: [id])
+  user2     User     @relation("RoomUser2", fields: [user2Id], references: [id])
+  messages  Message[]
 }
 
 model Message {
   id        Int      @id @default(autoincrement())
-  content   String
+  text      String
   createdAt DateTime @default(now())
+  userId    Int
+  roomId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  room      Room     @relation(fields: [roomId], references: [id])
+}
 
-  roomId Int
-  userId Int
-
-  room Room @relation(fields: [roomId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+enum Role {
+  USER
+  ADMIN
 }

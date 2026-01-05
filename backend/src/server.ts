@@ -14,6 +14,8 @@ const io = new Server(server, {
 
 setupSocket(io);
 
-server.listen(env.port, () => {
-  console.log(`Server running on http://localhost:${env.port}`);
+const port = Number(env.PORT) || 3000;
+
+server.listen(port, () => {
+  console.log(`Server running on http://localhost:${port}`);
 });

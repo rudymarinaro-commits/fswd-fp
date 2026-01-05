@@ -1,73 +1,46 @@
-import { Server, Socket } from "socket.io";
+import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
-import { env } from "../config/env";
+import { prisma } from "../prisma";
 
-interface JwtPayload {
-  userId: number;
-  role: string;
-}
-
-type PresenceStatus = "online" | "offline";
-
-const onlineUsers = new Map<number, number>();
+type JwtPayload = { userId: number; role?: string };
 
 export function setupSocket(io: Server) {
+  // Auth middleware: prende token da handshake.auth.token
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
-    if (!token) return next(new Error("Unauthorized"));
-
     try {
-      const payload = jwt.verify(token, env.jwtSecret) as JwtPayload;
-      socket.data.userId = payload.userId;
-      socket.data.role = payload.role;
+      const token = socket.handshake.auth?.token as string | undefined;
+      if (!token) return next(new Error("Unauthorized"));
+
+      const payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
+      if (!payload?.userId) return next(new Error("Unauthorized"));
+
+      // salvo userId sul socket
+      (socket as any).userId = payload.userId;
       next();
     } catch {
-      next(new Error("Unauthorized"));
+      return next(new Error("Unauthorized"));
     }
   });
 
-  io.on("connection", (socket: Socket) => {
-    const userId = socket.data.userId as number;
+  io.on("connection", (socket) => {
+    // join room solo se l'utente è membro
+    socket.on("joinRoom", async (roomId: number) => {
+      const key = `room:${roomId}`;
+      const userId: number = (socket as any).userId;
 
-    // Presence online
-    const count = (onlineUsers.get(userId) ?? 0) + 1;
-    onlineUsers.set(userId, count);
-    io.emit("presence:update", { userId, status: "online" as PresenceStatus });
+      const room = await prisma.room.findUnique({ where: { id: roomId } });
+      if (!room) return;
 
-    // Join room
-    socket.on("joinRoom", (roomId: number) => {
-      socket.join(`room:${roomId}`);
-    });
-
-    // Send message
-    socket.on("sendMessage", (message) => {
-      io.to(`room:${message.roomId}`).emit("newMessage", message);
-    });
-
-    // WebRTC signaling
-    socket.on("webrtc:offer", (payload) => {
-      socket.to(payload.target).emit("webrtc:offer", payload);
-    });
-
-    socket.on("webrtc:answer", (payload) => {
-      socket.to(payload.target).emit("webrtc:answer", payload);
-    });
-
-    socket.on("webrtc:ice", (payload) => {
-      socket.to(payload.target).emit("webrtc:ice", payload);
-    });
-
-    socket.on("disconnect", () => {
-      const c = (onlineUsers.get(userId) ?? 1) - 1;
-      if (c <= 0) {
-        onlineUsers.delete(userId);
-        io.emit("presence:update", {
-          userId,
-          status: "offline" as PresenceStatus,
-        });
-      } else {
-        onlineUsers.set(userId, c);
+      if (room.user1Id === userId || room.user2Id === userId) {
+        socket.join(key);
       }
+    });
+
+    // riceve un "message" già salvato via REST e lo inoltra alla room
+    socket.on("sendMessage", (message: any) => {
+      if (!message?.roomId) return;
+      const key = `room:${Number(message.roomId)}`;
+      io.to(key).emit("newMessage", message);
     });
   });
 }
