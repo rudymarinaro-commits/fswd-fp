@@ -19,5 +19,11 @@ export async function apiFetch<T>(
     throw new Error(err.message || "API error");
   }
 
-  return res.json();
+  // 204 No Content (es. DELETE) → niente JSON da parsare
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }

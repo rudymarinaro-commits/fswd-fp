@@ -12,8 +12,10 @@ export type AuthUser = {
 export type AuthContextValue = {
   user: AuthUser | null;
   token: string | null;
+  loading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  refreshMe: () => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

@@ -2,6 +2,10 @@ import { Response } from "express";
 import { prisma } from "../prisma";
 import type { AuthRequest } from "../middlewares/auth.middleware";
 
+function normalizePair(a: number, b: number) {
+  return a < b ? { user1Id: a, user2Id: b } : { user1Id: b, user2Id: a };
+}
+
 export async function getMyRooms(req: AuthRequest, res: Response) {
   try {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -22,6 +26,11 @@ export async function getMyRooms(req: AuthRequest, res: Response) {
   }
 }
 
+/**
+ * POST /api/rooms  (alias checklist)
+ * POST /api/rooms/dm (legacy)
+ * Body: { otherUserId }
+ */
 export async function getOrCreateDmRoom(req: AuthRequest, res: Response) {
   try {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -38,22 +47,39 @@ export async function getOrCreateDmRoom(req: AuthRequest, res: Response) {
         .json({ message: "Cannot create DM with yourself" });
     }
 
-    const existing = await prisma.room.findFirst({
-      where: {
-        OR: [
-          { user1Id: meId, user2Id: otherUserId },
-          { user1Id: otherUserId, user2Id: meId },
-        ],
-      },
+    // (opzionale ma utile) verifica che l'utente esista
+    const otherExists = await prisma.user.findUnique({
+      where: { id: otherUserId },
+      select: { id: true },
+    });
+    if (!otherExists) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const { user1Id, user2Id } = normalizePair(meId, otherUserId);
+
+    // ✅ con @@unique possiamo usare findUnique sulla chiave composta
+    const existing = await prisma.room.findUnique({
+      where: { user1Id_user2Id: { user1Id, user2Id } },
     });
 
     if (existing) return res.json(existing);
 
-    const room = await prisma.room.create({
-      data: { user1Id: meId, user2Id: otherUserId },
-    });
-
-    return res.status(201).json(room);
+    try {
+      const room = await prisma.room.create({
+        data: { user1Id, user2Id },
+      });
+      return res.status(201).json(room);
+    } catch (err: any) {
+      // race condition: se due richieste creano insieme, una fallisce con unique
+      if (err?.code === "P2002") {
+        const room = await prisma.room.findUnique({
+          where: { user1Id_user2Id: { user1Id, user2Id } },
+        });
+        if (room) return res.json(room);
+      }
+      throw err;
+    }
   } catch (err) {
     console.error("getOrCreateDmRoom error", err);
     return res.status(500).json({ message: "Internal server error" });
