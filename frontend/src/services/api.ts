@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:3000";
+const API_URL = "http://localhost:3000/api";
 
 export async function apiFetch<T>(
   path: string,
@@ -15,7 +15,7 @@ export async function apiFetch<T>(
   });
 
   if (!res.ok) {
-    const err = await res.json();
+    const err = await res.json().catch(() => ({}));
     throw new Error(err.message || "API error");
   }
 

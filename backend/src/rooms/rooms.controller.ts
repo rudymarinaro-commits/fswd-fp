@@ -1,12 +1,12 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { prisma } from "../prisma";
+import type { AuthRequest } from "../middlewares/auth.middleware";
 
-/**
- * Ritorna tutte le room dell'utente loggato
- */
-export async function getMyRooms(req: Request, res: Response) {
+export async function getMyRooms(req: AuthRequest, res: Response) {
   try {
-    const userId = req.user!.id;
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+    const userId = req.user.id;
 
     const rooms = await prisma.room.findMany({
       where: {
@@ -22,18 +22,16 @@ export async function getMyRooms(req: Request, res: Response) {
   }
 }
 
-/**
- * Ritorna una room 1-to-1 esistente oppure la crea
- */
-export async function getOrCreateDmRoom(req: Request, res: Response) {
+export async function getOrCreateDmRoom(req: AuthRequest, res: Response) {
   try {
-    const meId = req.user!.id;
-    const { otherUserId } = req.body as { otherUserId?: number };
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-    if (!otherUserId || typeof otherUserId !== "number") {
-      return res.status(400).json({ message: "otherUserId (number) required" });
+    const meId = req.user.id;
+    const otherUserId = Number((req.body as any)?.otherUserId);
+
+    if (!otherUserId || Number.isNaN(otherUserId)) {
+      return res.status(400).json({ message: "otherUserId required" });
     }
-
     if (otherUserId === meId) {
       return res
         .status(400)
@@ -49,15 +47,10 @@ export async function getOrCreateDmRoom(req: Request, res: Response) {
       },
     });
 
-    if (existing) {
-      return res.json(existing);
-    }
+    if (existing) return res.json(existing);
 
     const room = await prisma.room.create({
-      data: {
-        user1Id: meId,
-        user2Id: otherUserId,
-      },
+      data: { user1Id: meId, user2Id: otherUserId },
     });
 
     return res.status(201).json(room);

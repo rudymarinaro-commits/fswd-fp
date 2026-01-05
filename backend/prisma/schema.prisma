@@ -1,31 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   email        String   @unique
   passwordHash String
   role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+
+  roomsAsUser1 Room[]   @relation("RoomUser1")
+  roomsAsUser2 Room[]   @relation("RoomUser2")
   messages     Message[]
-  roomsAsUser1 Room[]  @relation("RoomUser1")
-  roomsAsUser2 Room[]  @relation("RoomUser2")
+
+  @@map("users")
 }
 
 model Room {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
-  user1Id   Int
-  user2Id   Int
-  user1     User     @relation("RoomUser1", fields: [user1Id], references: [id])
-  user2     User     @relation("RoomUser2", fields: [user2Id], references: [id])
-  messages  Message[]
+
+  user1Id Int
+  user2Id Int
+
+  user1 User @relation("RoomUser1", fields: [user1Id], references: [id])
+  user2 User @relation("RoomUser2", fields: [user2Id], references: [id])
+
+  messages Message[]
+
+  @@index([user1Id])
+  @@index([user2Id])
+  @@map("rooms")
 }
 
 model Message {
   id        Int      @id @default(autoincrement())
-  text      String
-  createdAt DateTime @default(now())
-  userId    Int
   roomId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  room      Room     @relation(fields: [roomId], references: [id])
+  userId    Int
+
+  // ✅ Colonna reale nel DB: "content"
+  content   String
+
+  createdAt DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([roomId])
+  @@index([userId])
+  @@map("messages")
 }
 
 enum Role {

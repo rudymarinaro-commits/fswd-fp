@@ -1,16 +1,13 @@
+// backend/src/messages/messages.routes.ts
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { requireRoomMember } from "../middlewares/requireRoomMember.middleware";
-import { getRoomMessages, createMessage } from "./messages.controller";
+import { createMessage } from "./messages.controller";
 
 const router = Router();
 
-router.get(
-  "/rooms/:roomId/messages",
-  requireAuth,
-  requireRoomMember,
-  getRoomMessages
-);
-router.post("/messages", requireAuth, requireRoomMember, createMessage);
+// Base in app.ts: app.use("/api/messages", router)
+// POST /api/messages  body: { roomId, content }
+router.post("/", requireAuth, requireRoomMember, createMessage);
 
 export default router;

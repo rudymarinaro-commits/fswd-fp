@@ -1,12 +1,19 @@
 import { createContext } from "react";
-import type { User } from "../types";
 
-export type AuthContextType = {
+export type Role = "USER" | "ADMIN";
+
+export type AuthUser = {
+  id: number;
+  email: string;
+  role: Role;
+  createdAt?: string;
+};
+
+export type AuthContextValue = {
+  user: AuthUser | null;
   token: string | null;
-  user: User | null;
-  loading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
 };
 
-export const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthContextValue | null>(null);

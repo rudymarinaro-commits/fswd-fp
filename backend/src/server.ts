@@ -1,6 +1,6 @@
 import http from "http";
 import { Server } from "socket.io";
-import { app } from "./app";
+import app from "./app";
 import { env } from "./config/env";
 import { setupSocket } from "./services/socket";
 

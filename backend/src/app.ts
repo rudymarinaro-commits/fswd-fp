@@ -1,18 +1,29 @@
+// backend/src/app.ts
 import express from "express";
 import cors from "cors";
+
 import authRoutes from "./auth/auth.routes";
+import usersRoutes from "./users/users.routes";
 import roomsRoutes from "./rooms/rooms.routes";
 import messagesRoutes from "./messages/messages.routes";
-import usersRoutes from "./users/users.routes";
 
-export const app = express();
+const app = express();
 
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
-app.use("/api", messagesRoutes);
+app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.use("/auth", authRoutes);
-app.use("/rooms", roomsRoutes);
-app.use("/messages", messagesRoutes);
-app.use("/users", usersRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/users", usersRoutes);
+app.use("/api/rooms", roomsRoutes);
+
+// ✅ Manteniamo i messaggi su /api/messages (coerente col frontend e REST)
+app.use("/api/messages", messagesRoutes);
+
+export default app;

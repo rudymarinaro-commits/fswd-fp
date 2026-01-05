@@ -1,81 +1,68 @@
-import { useEffect, useState } from "react";
-import { AuthContext } from "./AuthContext";
-import type { User } from "../types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AuthContext, AuthUser } from "./AuthContext";
+import { apiFetch } from "../services/api";
+
+const TOKEN_KEY = "token";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem("token")
+  const [token, setToken] = useState<string | null>(
+    () => localStorage.getItem(TOKEN_KEY) || null
   );
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
-  async function login(email: string, password: string) {
-    const r = await fetch("http://localhost:3000/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (!r.ok) return false;
-
-    const data = await r.json();
-    localStorage.setItem("token", data.token);
-    setToken(data.token);
-
-    // 🔹 Carichiamo subito il profilo
-    try {
-      const meRes = await fetch("http://localhost:3000/auth/me", {
-        headers: { Authorization: `Bearer ${data.token}` },
-      });
-      if (meRes.ok) {
-        const me = await meRes.json();
-        setUser(me);
-      }
-    } catch {
-      // Se fallisce, lasciamo che useEffect gestisca il logout
-    }
-
-    return true;
-  }
-
-  function logout() {
-    localStorage.removeItem("token");
+  const logout = useCallback(() => {
     setToken(null);
     setUser(null);
-  }
+    localStorage.removeItem(TOKEN_KEY);
+  }, []);
+
+  const fetchMe = useCallback(async (t: string) => {
+    const me = await apiFetch<AuthUser>("/auth/me", {}, t);
+    setUser(me);
+  }, []);
 
   useEffect(() => {
-    async function loadMe() {
-      if (!token) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
+    if (!token) return;
 
+    let cancelled = false;
+
+    (async () => {
       try {
-        const r = await fetch("http://localhost:3000/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!r.ok) {
-          logout();
-          setLoading(false);
-          return;
-        }
-        const me = await r.json();
-        setUser(me);
+        await fetchMe(token);
       } catch {
-        logout();
-      } finally {
-        setLoading(false);
+        if (!cancelled) logout();
       }
-    }
+    })();
 
-    loadMe();
-  }, [token]);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, fetchMe, logout]);
 
-  return (
-    <AuthContext.Provider value={{ token, user, loading, login, logout }}>
-      {children}
-    </AuthContext.Provider>
+  const login = useCallback(
+    async (email: string, password: string) => {
+      try {
+        const data = await apiFetch<{ token: string }>("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        });
+
+        localStorage.setItem(TOKEN_KEY, data.token);
+        setToken(data.token);
+
+        await fetchMe(data.token);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [fetchMe]
   );
+
+  const value = useMemo(
+    () => ({ user, token, login, logout }),
+    [user, token, login, logout]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

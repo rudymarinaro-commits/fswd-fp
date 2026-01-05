@@ -1,6 +1,11 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
+import type { AuthRequest } from "./auth.middleware";
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+export function requireAdmin(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) {
   if (!req.user) {
     return res.status(401).json({ message: "Unauthorized" });
   }
