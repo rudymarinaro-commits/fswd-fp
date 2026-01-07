@@ -8,22 +8,27 @@ export async function apiFetch<T>(
   const res = await fetch(API_URL + path, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "API error");
-  }
-
-  // 204 No Content (es. DELETE) → niente JSON da parsare
-  if (res.status === 204) {
-    return undefined as T;
-  }
-
   const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
+
+  if (!res.ok) {
+    let msg = "API error";
+    try {
+      const parsed = text ? JSON.parse(text) : {};
+      msg = parsed?.message || msg;
+    } catch {
+      // ignore
+    }
+    throw new Error(msg);
+  }
+
+  // ✅ gestisce 204 No Content
+  if (res.status === 204 || !text) return undefined as T;
+
+  return JSON.parse(text) as T;
 }

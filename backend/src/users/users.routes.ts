@@ -1,14 +1,13 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { listUsers, me, updateMe } from "./users.controller";
+import { listUsers, getMe, updateMe } from "./users.controller";
 
 const router = Router();
 
-// /api/users
-router.get("/", requireAuth, listUsers);
+// Base in app.ts: app.use("/api/users", router)
 
-// /api/users/me
-router.get("/me", requireAuth, me);
+router.get("/", requireAuth, listUsers);
+router.get("/me", requireAuth, getMe);
 router.patch("/me", requireAuth, updateMe);
 
 export default router;

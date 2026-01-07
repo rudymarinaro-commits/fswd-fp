@@ -1,25 +1,35 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch } from "../services/api";
+import type { User } from "../types/api";
 
 export default function Profile() {
-  const { token, user, refreshMe, logout } = useAuth();
+  const { token, user, refreshMe } = useAuth();
 
-  const [email, setEmail] = useState(user?.email ?? "");
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const createdAt = useMemo(() => {
-    if (!user?.createdAt) return null;
-    try {
-      return new Date(user.createdAt).toLocaleString("it-IT");
-    } catch {
-      return user.createdAt;
-    }
-  }, [user?.createdAt]);
+  useEffect(() => {
+    if (!user) return;
+    setEmail(user.email ?? "");
+    setFirstName(user.firstName ?? "");
+    setLastName(user.lastName ?? "");
+    setUsername(user.username ?? "");
+    setPhone(user.phone ?? "");
+    setAddress(user.address ?? "");
+    setAvatarUrl(user.avatarUrl ?? "");
+  }, [user]);
 
   async function save() {
     if (!token) return;
@@ -28,87 +38,119 @@ export default function Profile() {
     setMsg(null);
 
     try {
-      await apiFetch(
+      const payload: any = {
+        email,
+        firstName,
+        lastName,
+        username,
+        phone,
+        address,
+        avatarUrl,
+      };
+
+      // Cambio password solo se compilata
+      if (currentPassword || newPassword) {
+        payload.currentPassword = currentPassword;
+        payload.newPassword = newPassword;
+      }
+
+      await apiFetch<User>(
         "/users/me",
         {
           method: "PATCH",
-          body: JSON.stringify({
-            email: email.trim(),
-            ...(newPassword
-              ? { currentPassword: currentPassword, newPassword: newPassword }
-              : {}),
-          }),
+          body: JSON.stringify(payload),
         },
         token
       );
 
-      await refreshMe();
       setCurrentPassword("");
       setNewPassword("");
-      setMsg("Profilo aggiornato ✅");
+
+      await refreshMe();
+      setMsg("✅ Profilo aggiornato");
     } catch (e: any) {
-      setMsg(e?.message || "Errore");
+      setMsg(`❌ ${e?.message || "Errore aggiornamento profilo"}`);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 520, margin: "24px auto" }}>
+    <div style={{ maxWidth: 520, margin: "20px auto", display: "grid", gap: 10 }}>
       <h2>Profilo</h2>
 
-      <div style={{ marginBottom: 12 }}>
-        <div>
-          <strong>Ruolo:</strong> {user?.role}
-        </div>
-        {createdAt && (
-          <div>
-            <strong>Creato il:</strong> {createdAt}
-          </div>
-        )}
-      </div>
+      {msg && <div>{msg}</div>}
 
-      <div style={{ display: "grid", gap: 8 }}>
-        <label>
-          Email
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
+      <label>
+        Email (univoca)
+        <input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} />
+      </label>
 
-        <hr />
+      <label>
+        Nome
+        <input value={firstName} onChange={(e) => setFirstName(e.target.value)} style={{ width: "100%" }} />
+      </label>
 
-        <label>
-          Password attuale (solo se vuoi cambiarla)
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
+      <label>
+        Cognome
+        <input value={lastName} onChange={(e) => setLastName(e.target.value)} style={{ width: "100%" }} />
+      </label>
 
-        <label>
-          Nuova password (min 6)
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
+      <label>
+        Username (non univoco)
+        <input value={username} onChange={(e) => setUsername(e.target.value)} style={{ width: "100%" }} />
+      </label>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={save} disabled={saving}>
-            {saving ? "Salvataggio..." : "Salva"}
-          </button>
-          <button onClick={logout}>Logout</button>
-        </div>
+      <label>
+        Telefono (facoltativo)
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} />
+      </label>
 
-        {msg && <div>{msg}</div>}
-      </div>
+      <label>
+        Indirizzo (facoltativo)
+        <input value={address} onChange={(e) => setAddress(e.target.value)} style={{ width: "100%" }} />
+      </label>
+
+      <label>
+        Immagine profilo (URL facoltativo)
+        <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} style={{ width: "100%" }} />
+      </label>
+
+      {avatarUrl?.trim() && (
+        <img
+          src={avatarUrl}
+          alt="avatar"
+          style={{ width: 90, height: 90, objectFit: "cover", borderRadius: 12, border: "1px solid #ddd" }}
+        />
+      )}
+
+      <hr />
+
+      <h3 style={{ margin: 0 }}>Cambio password</h3>
+
+      <label>
+        Password attuale
+        <input
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          style={{ width: "100%" }}
+        />
+      </label>
+
+      <label>
+        Nuova password
+        <input
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          style={{ width: "100%" }}
+        />
+      </label>
+
+      <button onClick={save} disabled={saving} style={{ padding: "10px 12px" }}>
+        {saving ? "Salvo..." : "Salva"}
+      </button>
     </div>
   );
 }

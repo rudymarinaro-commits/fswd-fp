@@ -1,8 +1,19 @@
+export type Role = "USER" | "ADMIN";
+
 export interface User {
   id: number;
   email: string;
-  role: "USER" | "ADMIN";
+  role: Role;
   createdAt?: string;
+
+  // ✅ profilo esteso (traccia punto 4.1)
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+
+  phone?: string | null;
+  address?: string | null;
+  avatarUrl?: string | null;
 }
 
 export type Room = {
@@ -22,6 +33,7 @@ export type Message = {
 
 export type LoginResponse = {
   token: string;
+  user: User;
 };
 
 export type ApiError = {

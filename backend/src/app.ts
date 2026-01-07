@@ -16,6 +16,7 @@ app.use(
     credentials: true,
   })
 );
+
 app.use(express.json());
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -24,8 +25,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/rooms", roomsRoutes);
-
-// ✅ Manteniamo i messaggi su /api/messages (coerente col frontend e REST)
 app.use("/api/messages", messagesRoutes);
 
 export default app;
