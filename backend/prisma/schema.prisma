@@ -35,18 +35,20 @@ model Room {
 
   @@index([user1Id])
   @@index([user2Id])
+
+  // ✅ FASE 3: vincolo unicità per DM normalizzate (user1Id < user2Id)
+  @@unique([user1Id, user2Id])
+
   @@map("rooms")
 }
 
 model Message {
   id        Int      @id @default(autoincrement())
-  roomId    Int
-  userId    Int
-
-  // ✅ Colonna reale nel DB: "content"
   content   String
-
   createdAt DateTime @default(now())
+
+  roomId Int
+  userId Int
 
   room Room @relation(fields: [roomId], references: [id])
   user User @relation(fields: [userId], references: [id])

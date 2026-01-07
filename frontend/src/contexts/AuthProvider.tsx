@@ -9,6 +9,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => localStorage.getItem(TOKEN_KEY) || null
   );
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const logout = useCallback(() => {
     setToken(null);
@@ -21,16 +22,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(me);
   }, []);
 
-  useEffect(() => {
+  const refreshMe = useCallback(async () => {
     if (!token) return;
+    await fetchMe(token);
+  }, [token, fetchMe]);
 
+  useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
+        if (!token) {
+          if (!cancelled) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!cancelled) setLoading(true);
         await fetchMe(token);
+        if (!cancelled) setLoading(false);
       } catch {
-        if (!cancelled) logout();
+        if (!cancelled) {
+          logout();
+          setLoading(false);
+        }
       }
     })();
 
@@ -60,8 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ user, token, login, logout }),
-    [user, token, login, logout]
+    () => ({ user, token, loading, login, logout, refreshMe }),
+    [user, token, loading, login, logout, refreshMe]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

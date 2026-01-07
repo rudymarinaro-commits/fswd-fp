@@ -1,8 +1,8 @@
 export interface User {
   id: number;
   email: string;
-  username?: string | null;
-  role: string;
+  role: "USER" | "ADMIN";
+  createdAt?: string;
 }
 
 export type Room = {
