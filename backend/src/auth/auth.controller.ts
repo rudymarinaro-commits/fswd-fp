@@ -3,33 +3,43 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { prisma } from "../prisma";
 import { env } from "../config/env";
-import { loginSchema } from "./auth.schemas";
 import type { AuthRequest } from "../middlewares/auth.middleware";
 
-function toAuthUser(user: {
-  id: number;
-  email: string;
-  role: string;
-  createdAt: Date;
-}) {
+function toAuthUser(user: any) {
   return {
     id: user.id,
     email: user.email,
     role: user.role as "USER" | "ADMIN",
-    createdAt: user.createdAt.toISOString(),
+
+    // ✅ Profilo esteso (traccia punto 4.1)
+    firstName: user.firstName ?? "",
+    lastName: user.lastName ?? "",
+    username: user.username ?? "",
+    phone: user.phone ?? null,
+    address: user.address ?? null,
+    avatarUrl: user.avatarUrl ?? null,
+
+    createdAt: user.createdAt?.toISOString?.() ?? new Date().toISOString(),
   };
 }
 
 export async function login(req: Request, res: Response) {
   try {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
+    const { email, password } = (req.body ?? {}) as {
+      email?: unknown;
+      password?: unknown;
+    };
+
+    if (typeof email !== "string" || typeof password !== "string") {
       return res.status(400).json({ message: "Email and password required" });
     }
 
-    const { email, password } = parsed.data;
+    const emailNorm = email.trim().toLowerCase();
+    if (!emailNorm || !password) {
+      return res.status(400).json({ message: "Email and password required" });
+    }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email: emailNorm } });
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
     const ok = await bcrypt.compare(password, user.passwordHash);
@@ -38,9 +48,7 @@ export async function login(req: Request, res: Response) {
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       env.jwtSecret,
-      {
-        expiresIn: env.jwtExpiresIn,
-      }
+      { expiresIn: env.jwtExpiresIn }
     );
 
     return res.json({ token, user: toAuthUser(user) });
@@ -51,8 +59,6 @@ export async function login(req: Request, res: Response) {
 }
 
 export async function me(req: AuthRequest, res: Response) {
-  // ✅ TypeScript: user è opzionale, runtime: requireAuth lo garantisce
   if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
   return res.json(toAuthUser(req.user));
 }

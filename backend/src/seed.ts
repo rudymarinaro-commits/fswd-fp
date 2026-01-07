@@ -18,37 +18,71 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
-    update: { passwordHash: adminHash, role: "ADMIN" },
-    create: { email: adminEmail, passwordHash: adminHash, role: "ADMIN" },
+    update: {
+      passwordHash: adminHash,
+      role: "ADMIN",
+      firstName: "Admin",
+      lastName: "Master",
+      username: "admin",
+      phone: null,
+      address: null,
+      avatarUrl: null,
+    },
+    create: {
+      email: adminEmail,
+      passwordHash: adminHash,
+      role: "ADMIN",
+      firstName: "Admin",
+      lastName: "Master",
+      username: "admin",
+      phone: null,
+      address: null,
+      avatarUrl: null,
+    },
   });
 
   const user = await prisma.user.upsert({
     where: { email: userEmail },
-    update: { passwordHash: userHash, role: "USER" },
-    create: { email: userEmail, passwordHash: userHash, role: "USER" },
+    update: {
+      passwordHash: userHash,
+      role: "USER",
+      firstName: "User",
+      lastName: "Demo",
+      username: "user",
+      phone: null,
+      address: null,
+      avatarUrl: null,
+    },
+    create: {
+      email: userEmail,
+      passwordHash: userHash,
+      role: "USER",
+      firstName: "User",
+      lastName: "Demo",
+      username: "user",
+      phone: null,
+      address: null,
+      avatarUrl: null,
+    },
   });
 
-  // Room 4 (coerente col tuo Chat.tsx hard-coded)
+  // Room DM unica (user1Id < user2Id)
+  const user1Id = Math.min(admin.id, user.id);
+  const user2Id = Math.max(admin.id, user.id);
+
   const room = await prisma.room.upsert({
-    where: { id: 4 },
-    update: { user1Id: admin.id, user2Id: user.id },
-    create: { id: 4, user1Id: admin.id, user2Id: user.id },
+    where: { user1Id_user2Id: { user1Id, user2Id } },
+    update: {},
+    create: { user1Id, user2Id },
   });
 
-  const existing = await prisma.message.count({ where: { roomId: room.id } });
-  if (existing === 0) {
-    await prisma.message.createMany({
-      data: [
-        { roomId: room.id, userId: admin.id, content: "Ciao! Sono l'admin 👋" },
-        {
-          roomId: room.id,
-          userId: user.id,
-          content: "Ciao admin, presente ✅",
-        },
-      ],
-      skipDuplicates: true,
-    });
-  }
+  await prisma.message.createMany({
+    data: [
+      { roomId: room.id, userId: admin.id, content: "Ciao! Sono l'admin " },
+      { roomId: room.id, userId: user.id, content: "Ciao admin, presente " },
+    ],
+    skipDuplicates: true,
+  });
 
   console.log("✅ Seed completato");
   console.log({

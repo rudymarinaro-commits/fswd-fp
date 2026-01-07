@@ -8,16 +8,26 @@ datasource db {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
+  id           Int    @id @default(autoincrement())
+  email        String @unique
   passwordHash String
-  role         Role     @default(USER)
-  createdAt    DateTime @default(now())
+  role         Role   @default(USER)
 
-  roomsAsUser1 Room[]   @relation("RoomUser1")
-  roomsAsUser2 Room[]   @relation("RoomUser2")
+  // ✅ Profilo esteso (punto 4 traccia)
+  firstName String  @default("")
+  lastName  String  @default("")
+  username  String  @default("") // NON univoco (come da traccia)
+  phone     String? @db.VarChar(30)
+  address   String? @db.VarChar(255)
+  avatarUrl String? @db.VarChar(500)
+
+  createdAt DateTime @default(now())
+
+  roomsAsUser1 Room[]    @relation("RoomUser1")
+  roomsAsUser2 Room[]    @relation("RoomUser2")
   messages     Message[]
 
+  @@index([username])
   @@map("users")
 }
 
@@ -33,22 +43,19 @@ model Room {
 
   messages Message[]
 
+  // ✅ DM univoca (coppia normalizzata)
+  @@unique([user1Id, user2Id])
   @@index([user1Id])
   @@index([user2Id])
-
-  // ✅ FASE 3: vincolo unicità per DM normalizzate (user1Id < user2Id)
-  @@unique([user1Id, user2Id])
-
   @@map("rooms")
 }
 
 model Message {
   id        Int      @id @default(autoincrement())
+  roomId    Int
+  userId    Int
   content   String
   createdAt DateTime @default(now())
-
-  roomId Int
-  userId Int
 
   room Room @relation(fields: [roomId], references: [id])
   user User @relation(fields: [userId], references: [id])
