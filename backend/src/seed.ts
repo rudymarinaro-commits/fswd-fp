@@ -66,7 +66,7 @@ async function main() {
     },
   });
 
-  // Room DM unica (user1Id < user2Id)
+  // Room DM unica
   const user1Id = Math.min(admin.id, user.id);
   const user2Id = Math.max(admin.id, user.id);
 

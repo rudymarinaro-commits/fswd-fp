@@ -29,7 +29,6 @@ export async function getMyRooms(req: AuthRequest, res: Response) {
 /**
  * POST /api/rooms  (alias checklist)
  * POST /api/rooms/dm (legacy)
- * Body: { otherUserId }
  */
 export async function getOrCreateDmRoom(req: AuthRequest, res: Response) {
   try {
@@ -47,7 +46,7 @@ export async function getOrCreateDmRoom(req: AuthRequest, res: Response) {
         .json({ message: "Cannot create DM with yourself" });
     }
 
-    // (opzionale ma utile) verifica che l'utente esista
+    // (opzionale) verifica che l'utente esista
     const otherExists = await prisma.user.findUnique({
       where: { id: otherUserId },
       select: { id: true },
@@ -58,7 +57,7 @@ export async function getOrCreateDmRoom(req: AuthRequest, res: Response) {
 
     const { user1Id, user2Id } = normalizePair(meId, otherUserId);
 
-    // ✅ con @@unique possiamo usare findUnique sulla chiave composta
+    // con @@unique possiamo usare findUnique sulla chiave composta
     const existing = await prisma.room.findUnique({
       where: { user1Id_user2Id: { user1Id, user2Id } },
     });

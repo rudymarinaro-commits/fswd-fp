@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 const prisma = new PrismaClient();
 
 async function main() {
-  const userId = 2; // ← cambia con l'id giusto (test2 o test3)
+  const userId = 2; //  cambia con l'id giusto (test2 o test3)
   const newPassword = "password123";
 
   const hash = await bcrypt.hash(newPassword, 10);

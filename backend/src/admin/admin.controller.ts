@@ -95,7 +95,7 @@ export async function createUser(req: Request, res: Response) {
         role,
         firstName,
         lastName,
-        username, // ✅ NON univoco
+        username, // NON univoco
         phone: phone ? phone : null,
         address: address ? address : null,
         avatarUrl: avatarUrl ? avatarUrl : null,
@@ -114,7 +114,7 @@ export async function createUser(req: Request, res: Response) {
 
 /**
  * PATCH /api/admin/users/:id
- * (opzionale ma utile) update profilo + reset password
+ * (opzionale) update profilo + reset password
  */
 export async function updateUser(req: Request, res: Response) {
   try {
@@ -151,7 +151,7 @@ export async function updateUser(req: Request, res: Response) {
     if (typeof body.username === "string") {
       const v = body.username.trim();
       if (!v) return res.status(400).json({ message: "username cannot be empty" });
-      data.username = v; // ✅ NON univoco
+      data.username = v; // NON univoco
     }
 
     if (typeof body.phone === "string") data.phone = body.phone.trim() || null;
@@ -197,7 +197,7 @@ export async function deleteUser(req: AuthRequest, res: Response) {
     const target = await prisma.user.findUnique({ where: { id } });
     if (!target) return res.status(404).json({ message: "User not found" });
 
-    // ⚠️ Se eliminiamo un utente, eliminiamo anche le sue room DM e i messaggi dentro quelle room
+    // Se eliminiamo un utente, eliminiamo anche le sue room DM e i messaggi dentro quelle room
     await prisma.$transaction(async (tx) => {
       const rooms = await tx.room.findMany({
         where: { OR: [{ user1Id: id }, { user2Id: id }] },

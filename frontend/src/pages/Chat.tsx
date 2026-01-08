@@ -1,15 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import type { Message, Room, User } from "../types/api";
 import { apiFetch } from "../services/api";
-// import { socket, setSocketToken } from "../services/socket"; // FASE 4
+import { useSocket } from "../contexts/useSocket";
 
 const API = "http://localhost:3000/api";
 const LIMIT = 30;
-
-// ✅ per FASE 3: REST only (socket lo riattiviamo in FASE 4)
-const USE_SOCKET = false;
 
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString("it-IT", {
@@ -38,8 +35,51 @@ function upsertAndSort(prev: Message[], incoming: Message[]) {
   );
 }
 
+// =====================
+// PRESENZA (FASE 4 - Step 3)
+// presenceByUserId contiene SOLO ONLINE/IDLE
+// OFFLINE = default se l'utente non è nella mappa
+// =====================
+function getPresenceStatus(
+  userId: number,
+  map: Record<number, "ONLINE" | "IDLE">
+): "ONLINE" | "IDLE" | "OFFLINE" {
+  return map[userId] ?? "OFFLINE";
+}
+
+function presenceDotStyle(status: "ONLINE" | "IDLE" | "OFFLINE"): CSSProperties {
+  const base: CSSProperties = {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    display: "inline-block",
+    flexShrink: 0,
+  };
+
+  if (status === "ONLINE") return { ...base, background: "#22c55e" }; // verde
+  if (status === "IDLE") return { ...base, background: "#f59e0b" }; // giallo
+  return { ...base, background: "#9ca3af" }; // grigio
+}
+
+function badgeStyle(): CSSProperties {
+  return {
+    minWidth: 18,
+    height: 18,
+    padding: "0 6px",
+    borderRadius: 999,
+    background: "#ef4444",
+    color: "white",
+    fontSize: 12,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    lineHeight: "18px",
+  };
+}
+
 export default function Chat() {
   const { token, user, logout } = useAuth();
+  const { socket, connected, presenceByUserId } = useSocket();
   const navigate = useNavigate();
 
   // LEFT: users list
@@ -70,13 +110,81 @@ export default function Chat() {
     {}
   );
 
+  // =====================
+  // BADGE / NOTIFICHE (Step 4 extra)
+  // =====================
+  // otherUserId -> roomId
+  const [roomIdByOtherUserId, setRoomIdByOtherUserId] = useState<Record<number, number>>(
+    {}
+  );
+  // roomId -> otherUserId
+  const [otherUserIdByRoomId, setOtherUserIdByRoomId] = useState<Record<number, number>>(
+    {}
+  );
+  // roomId -> conteggio non letti
+  const [unreadByRoomId, setUnreadByRoomId] = useState<Record<number, number>>({});
+
+  const [toast, setToast] = useState<{
+    otherUserId: number;
+    roomId: number;
+    preview: string;
+  } | null>(null);
+
+  const toastTimerRef = useRef<number | null>(null);
+
   // (opzionale) scroll fondo
   const bottomRef = useRef<HTMLDivElement | null>(null);
   function scrollToBottom() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
-  // 1) Load users
+  // Ref per sapere sempre qual è la room attiva (evita closure stale nel listener socket)
+  const currentRoomIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    currentRoomIdRef.current = room?.id ?? null;
+  }, [room?.id]);
+
+  // =====================
+  // ✅ BADGE TOTALE (DA INSERIRE QUI)
+  // Somma di tutti i badge per room
+  // =====================
+  const totalUnread = useMemo(() => {
+    return Object.values(unreadByRoomId).reduce((sum, n) => sum + n, 0);
+  }, [unreadByRoomId]);
+
+  // =====================
+  // Helper: garantisce mapping room <-> user
+  // (evita chiamate duplicate con una mappa "inflight")
+  // =====================
+  const inflightRoomReqRef = useRef<Map<number, Promise<Room>>>(new Map());
+
+  async function ensureRoomForOtherUser(otherUserId: number): Promise<Room> {
+    if (!token) throw new Error("No token");
+
+    const inflight = inflightRoomReqRef.current.get(otherUserId);
+    if (inflight) return inflight;
+
+    const p = apiFetch<Room>(
+      "/rooms",
+      { method: "POST", body: JSON.stringify({ otherUserId }) },
+      token
+    )
+      .then((r) => {
+        setRoomIdByOtherUserId((prev) => ({ ...prev, [otherUserId]: r.id }));
+        setOtherUserIdByRoomId((prev) => ({ ...prev, [r.id]: otherUserId }));
+        inflightRoomReqRef.current.delete(otherUserId);
+        return r;
+      })
+      .catch((e) => {
+        inflightRoomReqRef.current.delete(otherUserId);
+        throw e;
+      });
+
+    inflightRoomReqRef.current.set(otherUserId, p);
+    return p;
+  }
+
+  // 1) Load users (REST)
   useEffect(() => {
     let cancelled = false;
 
@@ -100,27 +208,52 @@ export default function Chat() {
     };
   }, [token]);
 
-  // 2) Select user -> create/recover DM room (FASE 3)
+  // 1b) Prefetch roomId per ogni utente (serve per badge su chat non attive)
+  useEffect(() => {
+    if (!token) return;
+    if (!user?.id) return;
+    if (users.length === 0) return;
+
+    const others = users.filter((u) => u.id !== user.id);
+
+    for (const u of others) {
+      if (roomIdByOtherUserId[u.id]) continue;
+      ensureRoomForOtherUser(u.id).catch(() => {
+        // ignoriamo: badge non disponibile finché non apri la chat
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, user?.id, users]);
+
+  // 2) Select user -> create/recover DM room (REST)
   async function openChatWith(u: User) {
     if (!token) return;
 
     setSelectedUser(u);
     setError(null);
 
-    // Nota: NON svuotiamo brutalmente la chat
-    // Mostriamo cache appena abbiamo roomId
-
     try {
       const r = await apiFetch<Room>(
         "/rooms",
-        {
-          method: "POST",
-          body: JSON.stringify({ otherUserId: u.id }),
-        },
+        { method: "POST", body: JSON.stringify({ otherUserId: u.id }) },
         token
       );
 
+      // aggiorna mapping room<->user
+      setRoomIdByOtherUserId((prev) => ({ ...prev, [u.id]: r.id }));
+      setOtherUserIdByRoomId((prev) => ({ ...prev, [r.id]: u.id }));
+
       setRoom(r);
+
+      // ✅ azzera badge/non-letti per questa room
+      setUnreadByRoomId((prev) => {
+        const next = { ...prev };
+        delete next[r.id];
+        return next;
+      });
+
+      // se toast riguarda questa chat, la chiudo
+      setToast((t) => (t?.roomId === r.id ? null : t));
 
       // mostra cache se esiste
       const cachedMsgs = messagesByRoom[r.id] ?? [];
@@ -131,16 +264,13 @@ export default function Chat() {
       setPage(cachedPage);
       setHasMore(cachedHasMore);
 
-      // se non c'è cache, forziamo page=1 (scatterà il fetch se room cambia)
-      if (!messagesByRoom[r.id]) {
-        setPage(1);
-      }
+      if (!messagesByRoom[r.id]) setPage(1);
     } catch (e: any) {
       setError(e?.message || "Errore creazione/recupero room");
     }
   }
 
-  // 3) Load messages for current room + pagination
+  // 3) Load messages for current room + pagination (REST)
   useEffect(() => {
     let cancelled = false;
 
@@ -154,9 +284,7 @@ export default function Chat() {
       try {
         const res = await fetch(
           `${API}/rooms/${room.id}/messages?limit=${LIMIT}&page=${page}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -166,8 +294,6 @@ export default function Chat() {
 
         setMessages((prev) => {
           const merged = upsertAndSort(prev, data);
-
-          // ✅ aggiorna cache
           setMessagesByRoom((m) => ({ ...m, [room.id]: merged }));
           return merged;
         });
@@ -175,7 +301,6 @@ export default function Chat() {
         const more = data.length === LIMIT;
         setHasMore(more);
 
-        // ✅ cache page/hasMore
         setPageByRoom((p) => ({ ...p, [room.id]: page }));
         setHasMoreByRoom((h) => ({ ...h, [room.id]: more }));
       } catch {
@@ -191,34 +316,80 @@ export default function Chat() {
     };
   }, [token, room?.id, page]);
 
-  // 4) Socket (FASE 4) — pronto ma disattivato
+  // =====================
+  // STEP 4 — JOIN ROOM realtime
+  // =====================
   useEffect(() => {
-    if (!USE_SOCKET) return;
     if (!token) return;
     if (!room?.id) return;
+    if (!connected) return;
 
-    // setSocketToken(token);
-    // socket.connect();
-    // socket.emit("joinRoom", room.id);
+    socket.emit("joinRoom", room.id, (ack: any) => {
+      if (!ack?.ok) {
+        setError(ack?.message || "Impossibile entrare nella room (socket)");
+      }
+    });
+  }, [token, room?.id, connected, socket]);
 
-    // const onNewMessage = (msg: Message) => {
-    //   setMessages((prev) => {
-    //     if (prev.some((m) => m.id === msg.id)) return prev;
-    //     const merged = upsertAndSort(prev, [msg]);
-    //     setMessagesByRoom((m) => ({ ...m, [room.id]: merged }));
-    //     return merged;
-    //   });
-    // };
-    // socket.on("newMessage", onNewMessage);
+  // =====================
+  // STEP 4 — LISTENER realtime newMessage + badge/notify
+  // =====================
+  useEffect(() => {
+    if (!token) return;
+
+    const onNewMessage = (msg: Message) => {
+      // aggiorno SEMPRE la cache stanza
+      setMessagesByRoom((m) => {
+        const prev = m[msg.roomId] ?? [];
+        const merged = upsertAndSort(prev, [msg]);
+        return { ...m, [msg.roomId]: merged };
+      });
+
+      const currentRoomId = currentRoomIdRef.current;
+
+      // Se è la room attiva -> aggiorno UI
+      if (currentRoomId && msg.roomId === currentRoomId) {
+        setMessages((prev) => {
+          if (prev.some((x) => x.id === msg.id)) return prev;
+          return upsertAndSort(prev, [msg]);
+        });
+        setTimeout(scrollToBottom, 0);
+        return;
+      }
+
+      // Se NON è la room attiva e NON è un messaggio mio -> badge + toast
+      if (msg.userId !== user?.id) {
+        setUnreadByRoomId((prev) => ({
+          ...prev,
+          [msg.roomId]: (prev[msg.roomId] ?? 0) + 1,
+        }));
+
+        const otherUserId = otherUserIdByRoomId[msg.roomId];
+        if (otherUserId) {
+          const preview =
+            msg.content.length > 50 ? msg.content.slice(0, 50) + "…" : msg.content;
+
+          setToast({ otherUserId, roomId: msg.roomId, preview });
+
+          if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+          toastTimerRef.current = window.setTimeout(() => setToast(null), 3500);
+        }
+      }
+    };
+
+    socket.off("newMessage", onNewMessage);
+    socket.on("newMessage", onNewMessage);
 
     return () => {
-      // socket.off("newMessage", onNewMessage);
+      socket.off("newMessage", onNewMessage);
     };
-  }, [token, room?.id]);
+  }, [token, socket, user?.id, otherUserIdByRoomId]);
 
   const grouped = useMemo(() => groupMessagesByDay(messages), [messages]);
 
-  // 5) Send message (REST) — ✅ NON resettare la chat
+  // =====================
+  // STEP 4 — SEND MESSAGE realtime (con fallback REST)
+  // =====================
   async function send() {
     if (!token) return;
     if (!room?.id) {
@@ -232,6 +403,34 @@ export default function Chat() {
     setSending(true);
     setError(null);
 
+    // ✅ Se socket connesso: invio realtime
+    if (connected) {
+      socket.emit("sendMessage", { roomId: room.id, content }, (ack: any) => {
+        try {
+          if (!ack?.ok) {
+            setError(ack?.error || "Errore invio messaggio (socket)");
+            return;
+          }
+
+          const saved: Message = ack.message;
+          setText("");
+
+          setMessages((prev) => {
+            const merged = upsertAndSort(prev, [saved]);
+            setMessagesByRoom((m) => ({ ...m, [room.id]: merged }));
+            return merged;
+          });
+
+          scrollToBottom();
+        } finally {
+          setSending(false);
+        }
+      });
+
+      return;
+    }
+
+    // ✅ Fallback REST (se socket non connesso)
     try {
       const res = await fetch(`${API}/messages`, {
         method: "POST",
@@ -244,12 +443,9 @@ export default function Chat() {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      // ✅ il backend dovrebbe restituire il messaggio creato
       const saved: Message = await res.json();
-
       setText("");
 
-      // ✅ aggiungiamo subito alla UI + cache
       setMessages((prev) => {
         const merged = upsertAndSort(prev, [saved]);
         setMessagesByRoom((m) => ({ ...m, [room.id]: merged }));
@@ -264,6 +460,20 @@ export default function Chat() {
     }
   }
 
+  // Helper: badge count per utente
+  function getUnreadForUser(otherUserId: number) {
+    const rid = roomIdByOtherUserId[otherUserId];
+    if (!rid) return 0;
+    return unreadByRoomId[rid] ?? 0;
+  }
+
+  // Click su toast -> apri chat con quell'utente
+  async function openFromToast() {
+    if (!toast) return;
+    const target = users.find((u) => u.id === toast.otherUserId);
+    if (target) await openChatWith(target);
+  }
+
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       {/* LEFT COLUMN */}
@@ -275,8 +485,18 @@ export default function Chat() {
           overflow: "auto",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <strong>Utenti</strong>
+        {/* ✅ QUI È STATO INSERITO IL BADGE TOTALE ACCANTO A "UTENTI" */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <strong>Utenti</strong>
+            {totalUnread > 0 && <span style={badgeStyle()}>{totalUnread}</span>}
+          </div>
           <button onClick={() => navigate("/profile")}>Profilo</button>
         </div>
 
@@ -292,6 +512,27 @@ export default function Chat() {
           </button>
         </div>
 
+        {/* Notifica “toast” (room non attiva) */}
+        {toast && (
+          <button
+            onClick={openFromToast}
+            style={{
+              width: "100%",
+              textAlign: "left",
+              padding: "8px 10px",
+              border: "1px solid #ddd",
+              borderRadius: 8,
+              background: "#fff7ed",
+              cursor: "pointer",
+              marginBottom: 10,
+            }}
+            title="Apri la chat"
+          >
+            <div style={{ fontWeight: 600, fontSize: 12 }}>Nuovo messaggio</div>
+            <div style={{ fontSize: 12, opacity: 0.85 }}>{toast.preview}</div>
+          </button>
+        )}
+
         {usersLoading && <div>Caricamento utenti...</div>}
         {usersError && <div style={{ color: "red" }}>{usersError}</div>}
 
@@ -300,6 +541,9 @@ export default function Chat() {
             .filter((u) => u.id !== user?.id)
             .map((u) => {
               const active = selectedUser?.id === u.id;
+              const status = getPresenceStatus(u.id, presenceByUserId);
+              const unread = getUnreadForUser(u.id);
+
               return (
                 <li key={u.id} style={{ marginBottom: 6 }}>
                   <button
@@ -314,7 +558,21 @@ export default function Chat() {
                       cursor: "pointer",
                     }}
                   >
-                    <div>{u.email}</div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={presenceDotStyle(status)} />
+                        <div>{u.email}</div>
+                      </div>
+
+                      {unread > 0 && <span style={badgeStyle()}>{unread}</span>}
+                    </div>
+
                     <div style={{ fontSize: 12, opacity: 0.7 }}>{u.role}</div>
                   </button>
                 </li>
