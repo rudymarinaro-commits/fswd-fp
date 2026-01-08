@@ -22,12 +22,12 @@ export async function apiFetch<T>(
       const parsed = text ? JSON.parse(text) : {};
       msg = parsed?.message || msg;
     } catch {
-      // ignore
+      // ignora
     }
     throw new Error(msg);
   }
 
-  // ✅ gestisce 204 No Content
+  // gestisce 204 No Content
   if (res.status === 204 || !text) return undefined as T;
 
   return JSON.parse(text) as T;

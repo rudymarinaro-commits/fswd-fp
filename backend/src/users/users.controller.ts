@@ -30,7 +30,7 @@ function toMeUser(u: any) {
  */
 export async function listUsers(req: AuthRequest, res: Response) {
   try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    if (!req.user) return res.status(401).json({ message: "Non autorizzato" });
 
     const users = await prisma.user.findMany({
       select: {
@@ -49,7 +49,7 @@ export async function listUsers(req: AuthRequest, res: Response) {
     return res.json(users.map(toPublicUser));
   } catch (err) {
     console.error("listUsers error:", err);
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Server Error" });
   }
 }
 
@@ -58,10 +58,10 @@ export async function listUsers(req: AuthRequest, res: Response) {
  */
 export async function getMe(req: AuthRequest, res: Response) {
   try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    if (!req.user) return res.status(401).json({ message: "Non autorizzato" });
 
     const me = await prisma.user.findUnique({ where: { id: req.user.id } });
-    if (!me) return res.status(404).json({ message: "User not found" });
+    if (!me) return res.status(404).json({ message: "Utente non trocato" });
 
     return res.json(toMeUser(me));
   } catch (err) {
@@ -76,7 +76,7 @@ export async function getMe(req: AuthRequest, res: Response) {
  */
 export async function updateMe(req: AuthRequest, res: Response) {
   try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+    if (!req.user) return res.status(401).json({ message: "Non autorizzato" });
 
     const body = (req.body ?? {}) as any;
     const data: any = {};
@@ -84,12 +84,12 @@ export async function updateMe(req: AuthRequest, res: Response) {
     // Email (univoca)
     if (typeof body.email === "string") {
       const email = body.email.trim().toLowerCase();
-      if (!email) return res.status(400).json({ message: "Email cannot be empty" });
+      if (!email) return res.status(400).json({ message: "Email non può essere vuota" });
 
       if (email !== req.user.email) {
         const exists = await prisma.user.findUnique({ where: { email } });
         if (exists && exists.id !== req.user.id) {
-          return res.status(409).json({ message: "Email already in use" });
+          return res.status(409).json({ message: "Email già in uso" });
         }
         data.email = email;
       }
@@ -98,20 +98,20 @@ export async function updateMe(req: AuthRequest, res: Response) {
     // Nome/Cognome/Username (traccia)
     if (typeof body.firstName === "string") {
       const v = body.firstName.trim();
-      if (!v) return res.status(400).json({ message: "firstName cannot be empty" });
+      if (!v) return res.status(400).json({ message: "Il nome non può essere vuoto" });
       data.firstName = v;
     }
 
     if (typeof body.lastName === "string") {
       const v = body.lastName.trim();
-      if (!v) return res.status(400).json({ message: "lastName cannot be empty" });
+      if (!v) return res.status(400).json({ message: "il cognome non può essere vuoto" });
       data.lastName = v;
     }
 
     if (typeof body.username === "string") {
       const v = body.username.trim();
-      if (!v) return res.status(400).json({ message: "username cannot be empty" });
-      data.username = v; // ✅ NON univoco
+      if (!v) return res.status(400).json({ message: "username non può essere vuoto" });
+      data.username = v; // non univoco
     }
 
     // Facoltativi (se stringa vuota => null)
@@ -137,25 +137,25 @@ export async function updateMe(req: AuthRequest, res: Response) {
     if (wantsPasswordChange) {
       if (typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
         return res.status(400).json({
-          message: "To change password provide currentPassword and newPassword",
+          message: "Per cambiare la password attuale per favore provvedere nuova password",
         });
       }
 
       if (body.newPassword.length < 6) {
-        return res.status(400).json({ message: "newPassword must be at least 6 chars" });
+        return res.status(400).json({ message: "New Password almeno 6 caratteri" });
       }
 
       const fresh = await prisma.user.findUnique({ where: { id: req.user.id } });
       if (!fresh) return res.status(404).json({ message: "User not found" });
 
       const ok = await bcrypt.compare(body.currentPassword, fresh.passwordHash);
-      if (!ok) return res.status(401).json({ message: "Current password is wrong" });
+      if (!ok) return res.status(401).json({ message: "Password attuale è errata" });
 
       data.passwordHash = await bcrypt.hash(body.newPassword, 10);
     }
 
     if (Object.keys(data).length === 0) {
-      return res.status(400).json({ message: "No fields to update" });
+      return res.status(400).json({ message: "Nessun campo da aggiornare" });
     }
 
     const updated = await prisma.user.update({
@@ -168,8 +168,8 @@ export async function updateMe(req: AuthRequest, res: Response) {
     console.error("updateMe error:", err);
     // Prisma unique violation fallback
     if (err?.code === "P2002") {
-      return res.status(409).json({ message: "Unique constraint violation" });
+      return res.status(409).json({ message: "Violazione della chiave unica" });
     }
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Errore interno del server" });
   }
 }

@@ -4,7 +4,7 @@ import { prisma } from "../prisma";
 import { env } from "../config/env";
 import type { User } from "@prisma/client";
 
-// ✅ user deve essere opzionale per essere compatibile con Express.Request
+// user deve essere opzionale per essere compatibile con Express.Request
 export type AuthRequest = Request & { user?: User };
 
 type JwtPayload = { userId: number; role?: string };

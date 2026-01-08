@@ -88,7 +88,7 @@ export default function Admin() {
 
     try {
       await apiFetch<void>(`/admin/users/${id}`, { method: "DELETE" }, token);
-      setMsg("✅ Utente eliminato");
+      setMsg("Utente eliminato");
       await loadUsers();
     } catch (e: any) {
       setMsg(`❌ ${e?.message || "Errore eliminazione utente"}`);
@@ -106,7 +106,7 @@ export default function Admin() {
         { method: "PATCH", body: JSON.stringify({ password: pwd }) },
         token
       );
-      setMsg("✅ Password aggiornata");
+      setMsg("🔝Password aggiornata");
     } catch (e: any) {
       setMsg(`❌ ${e?.message || "Errore reset password"}`);
     }

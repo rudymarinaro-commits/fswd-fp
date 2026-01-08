@@ -9,7 +9,7 @@ const router = Router();
 // Base in app.ts: app.use("/api/rooms", router)
 router.get("/my", requireAuth, getMyRooms);
 
-// ✅ Checklist-friendly alias: POST /api/rooms
+// Checklist-friendly alias: POST /api/rooms
 router.post("/", requireAuth, getOrCreateDmRoom);
 
 // Mantengo anche la tua route esistente

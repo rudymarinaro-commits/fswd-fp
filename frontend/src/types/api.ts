@@ -6,7 +6,7 @@ export interface User {
   role: Role;
   createdAt?: string;
 
-  // ✅ profilo esteso (traccia punto 4.1)
+  // profilo esteso (traccia punto 4.1)
   firstName?: string;
   lastName?: string;
   username?: string;

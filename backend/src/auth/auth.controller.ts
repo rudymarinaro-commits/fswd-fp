@@ -11,7 +11,7 @@ function toAuthUser(user: any) {
     email: user.email,
     role: user.role as "USER" | "ADMIN",
 
-    // ✅ Profilo esteso (traccia punto 4.1)
+    // Profilo esteso (traccia punto 4.1)
     firstName: user.firstName ?? "",
     lastName: user.lastName ?? "",
     username: user.username ?? "",
