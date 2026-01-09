@@ -15,131 +15,24 @@ type PresenceStatePayload = { userId: number; status: PresenceStatus };
 const socketsByUserId = new Map<number, Set<string>>();
 // Salviamo solo ONLINE/IDLE. OFFLINE viene rappresentato dall'assenza in mappa.
 const statusByUserId = new Map<number, Exclude<PresenceStatus, "OFFLINE">>();
-const idleTimerByUserId = new Map<number, ReturnType<typeof setTimeout>>();
-const offlineGraceTimerByUserId = new Map<
-  number,
-  ReturnType<typeof setTimeout>
->();
 
-const IDLE_TIMEOUT_MS = 90_000;
-const DISCONNECT_GRACE_MS = 4_000;
+const idleTimers = new Map<number, NodeJS.Timeout>();
+const offlineGraceTimers = new Map<number, NodeJS.Timeout>();
 
 function toRoomKey(roomId: number) {
   return `room:${roomId}`;
 }
 
-function parseRoomId(input: unknown): number | null {
-  const n = Number(input);
-  if (!n || Number.isNaN(n)) return null;
-  return n;
-}
-
-function buildPresenceSnapshot(): PresenceStatePayload[] {
-  return Array.from(statusByUserId.entries()).map(([userId, status]) => ({
-    userId,
-    status,
-  }));
-}
-
-function clearIdleTimer(userId: number) {
-  const t = idleTimerByUserId.get(userId);
-  if (t) {
-    clearTimeout(t);
-    idleTimerByUserId.delete(userId);
-  }
-}
-
-function cancelOfflineGrace(userId: number) {
-  const t = offlineGraceTimerByUserId.get(userId);
-  if (t) {
-    clearTimeout(t);
-    offlineGraceTimerByUserId.delete(userId);
-  }
-}
-
-function emitPresenceIfChanged(
-  io: Server,
-  userId: number,
-  status: PresenceStatus
-) {
-  const prev = statusByUserId.get(userId);
-
-  if (status === "OFFLINE") {
-    io.emit("presence:state", {
-      userId,
-      status,
-    } satisfies PresenceStatePayload);
-    statusByUserId.delete(userId);
-    clearIdleTimer(userId);
-    cancelOfflineGrace(userId);
-    socketsByUserId.delete(userId);
-    return;
-  }
-
-  if (prev === status) return;
-  statusByUserId.set(userId, status);
-  io.emit("presence:state", { userId, status } satisfies PresenceStatePayload);
-}
-
-function scheduleIdleTimer(io: Server, userId: number) {
-  clearIdleTimer(userId);
-
-  const t = setTimeout(() => {
-    const set = socketsByUserId.get(userId);
-    if (!set || set.size === 0) return;
-    emitPresenceIfChanged(io, userId, "IDLE");
-  }, IDLE_TIMEOUT_MS);
-
-  idleTimerByUserId.set(userId, t);
-}
-
-function touch(io: Server, userId: number) {
-  cancelOfflineGrace(userId);
-  emitPresenceIfChanged(io, userId, "ONLINE");
-  scheduleIdleTimer(io, userId);
-}
-
-function scheduleOfflineWithGrace(io: Server, userId: number) {
-  cancelOfflineGrace(userId);
-  clearIdleTimer(userId);
-
-  const t = setTimeout(() => {
-    const set = socketsByUserId.get(userId);
-    if (set && set.size > 0) return;
-    emitPresenceIfChanged(io, userId, "OFFLINE");
-  }, DISCONNECT_GRACE_MS);
-
-  offlineGraceTimerByUserId.set(userId, t);
-}
-
-// =====================
-// FASE 5 — WEBRTC SIGNALING (VIDEO ONLY, no any)
-// =====================
-
-type SdpLike = { type: "offer" | "answer"; sdp?: string };
-type IceLike = {
-  candidate?: string;
-  sdpMid?: string | null;
-  sdpMLineIndex?: number | null;
-};
-
-type OfferIn = { roomId: unknown; sdp: unknown };
-type AnswerIn = { roomId: unknown; sdp: unknown };
-type IceIn = { roomId: unknown; candidate: unknown };
-type HangupIn = { roomId: unknown };
-
-type OfferOut = {
-  roomId: number;
-  fromUserId: number;
-  sdp: SdpLike;
-};
-type AnswerOut = { roomId: number; fromUserId: number; sdp: SdpLike };
-type IceOut = { roomId: number; fromUserId: number; candidate: IceLike };
-type HangupOut = { roomId: number; fromUserId: number };
-
 function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null;
 }
+
+type SdpLike = {
+  type: "offer" | "answer";
+  sdp?: string;
+};
+
+type IceLike = RTCIceCandidateInit;
 
 function isSdpLike(x: unknown): x is SdpLike {
   if (!isRecord(x)) return false;
@@ -161,6 +54,103 @@ function emitToUser(
   if (!set || set.size === 0) return 0;
   for (const sid of set) io.to(sid).emit(event, payload);
   return set.size;
+}
+
+function clearIdleTimer(userId: number) {
+  const t = idleTimers.get(userId);
+  if (t) clearTimeout(t);
+  idleTimers.delete(userId);
+}
+
+function cancelOfflineGrace(userId: number) {
+  const t = offlineGraceTimers.get(userId);
+  if (t) clearTimeout(t);
+  offlineGraceTimers.delete(userId);
+}
+
+function buildPresenceSnapshot(): PresenceStatePayload[] {
+  const out: PresenceStatePayload[] = [];
+  for (const [userId, status] of statusByUserId.entries()) {
+    out.push({ userId, status });
+  }
+  return out;
+}
+
+function setPresence(io: Server, userId: number, status: PresenceStatus) {
+  if (status === "OFFLINE") {
+    io.emit("presence:state", {
+      userId,
+      status,
+    } satisfies PresenceStatePayload);
+    statusByUserId.delete(userId);
+    clearIdleTimer(userId);
+    cancelOfflineGrace(userId);
+    socketsByUserId.delete(userId);
+    return;
+  }
+
+  const prev = statusByUserId.get(userId);
+  if (prev === status) return;
+
+  statusByUserId.set(userId, status);
+  io.emit("presence:state", { userId, status } satisfies PresenceStatePayload);
+}
+
+function touch(io: Server, userId: number) {
+  setPresence(io, userId, "ONLINE");
+  clearIdleTimer(userId);
+
+  const t = setTimeout(() => {
+    setPresence(io, userId, "IDLE");
+  }, 60_000);
+
+  idleTimers.set(userId, t);
+}
+
+function scheduleOfflineWithGrace(io: Server, userId: number) {
+  cancelOfflineGrace(userId);
+
+  const t = setTimeout(() => {
+    setPresence(io, userId, "OFFLINE");
+  }, 2500);
+
+  offlineGraceTimers.set(userId, t);
+}
+
+// =====================
+// WebRTC payload types
+// =====================
+type OfferIn = { roomId: number; sdp: RTCSessionDescriptionInit };
+type OfferOut = {
+  roomId: number;
+  fromUserId: number;
+  sdp: RTCSessionDescriptionInit;
+};
+
+type AnswerIn = { roomId: number; sdp: RTCSessionDescriptionInit };
+type AnswerOut = {
+  roomId: number;
+  fromUserId: number;
+  sdp: RTCSessionDescriptionInit;
+};
+
+type IceIn = { roomId: number; candidate: RTCIceCandidateInit };
+type IceOut = {
+  roomId: number;
+  fromUserId: number;
+  candidate: RTCIceCandidateInit;
+};
+
+type HangupIn = { roomId: number };
+type HangupOut = { roomId: number; fromUserId: number };
+
+function parseRoomId(x: unknown): number | null {
+  if (typeof x === "number" && Number.isFinite(x)) return x;
+  if (typeof x === "string") {
+    const n = Number(x);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
 }
 
 export function setupSocket(io: Server) {
@@ -227,7 +217,9 @@ export function setupSocket(io: Server) {
         const isMember = room.user1Id === userId || room.user2Id === userId;
         if (!isMember) return ack?.({ ok: false, message: "Forbidden" });
 
-        socket.join(toRoomKey(roomId));
+        const key = toRoomKey(roomId);
+        socket.join(key);
+
         ack?.({ ok: true });
       } catch {
         ack?.({ ok: false, message: "Internal error" });
@@ -235,19 +227,30 @@ export function setupSocket(io: Server) {
     };
 
     socket.on("joinRoom", joinRoomHandler);
-    socket.on("room:join", joinRoomHandler);
+    socket.on(
+      "room:join",
+      (payload: unknown, ack?: (res: { ok: boolean }) => void) => {
+        if (!isRecord(payload)) return ack?.({ ok: false });
+        void joinRoomHandler(payload.roomId, (res) => ack?.({ ok: res.ok }));
+      }
+    );
 
-    // SEND MESSAGE
+    // =====================
+    // MESSAGGI (realtime + persist)
+    // =====================
     const sendMessageHandler = async (
       payload: unknown,
-      ack?: (res: { ok: boolean; message?: unknown; error?: string }) => void
+      ack?: (res: { ok: boolean; error?: string; message?: unknown }) => void
     ) => {
       try {
         touch(io, userId);
 
-        const p = isRecord(payload) ? payload : {};
-        const roomId = parseRoomId(p.roomId);
-        const content = typeof p.content === "string" ? p.content.trim() : "";
+        if (!isRecord(payload))
+          return ack?.({ ok: false, error: "Invalid payload" });
+
+        const roomId = parseRoomId(payload.roomId);
+        const content =
+          typeof payload.content === "string" ? payload.content.trim() : "";
 
         if (!roomId) return ack?.({ ok: false, error: "roomId required" });
         if (!content) return ack?.({ ok: false, error: "content required" });
@@ -311,14 +314,10 @@ export function setupSocket(io: Server) {
 
           const otherUserId =
             room.user1Id === userId ? room.user2Id : room.user1Id;
-          const out: OfferOut = {
-            roomId,
-            fromUserId: userId,
-            sdp: p.sdp,
-          };
 
-          const key = toRoomKey(roomId);
-          socket.to(key).emit("webrtc:offer", out);
+          const out: OfferOut = { roomId, fromUserId: userId, sdp: p.sdp };
+
+          // ✅ FIX: NO DUPLICATI (prima c'era anche socket.to(room).emit)
           const delivered = emitToUser(io, otherUserId, "webrtc:offer", out);
 
           // eslint-disable-next-line no-console
@@ -362,8 +361,7 @@ export function setupSocket(io: Server) {
 
           const out: AnswerOut = { roomId, fromUserId: userId, sdp: p.sdp };
 
-          const key = toRoomKey(roomId);
-          socket.to(key).emit("webrtc:answer", out);
+          // ✅ FIX: NO DUPLICATI
           emitToUser(io, otherUserId, "webrtc:answer", out);
 
           ack?.({ ok: true });
@@ -406,8 +404,7 @@ export function setupSocket(io: Server) {
             candidate: p.candidate,
           };
 
-          const key = toRoomKey(roomId);
-          socket.to(key).emit("webrtc:ice", out);
+          // ✅ FIX: NO DUPLICATI
           emitToUser(io, otherUserId, "webrtc:ice", out);
 
           ack?.({ ok: true });
@@ -444,8 +441,7 @@ export function setupSocket(io: Server) {
 
           const out: HangupOut = { roomId, fromUserId: userId };
 
-          const key = toRoomKey(roomId);
-          socket.to(key).emit("webrtc:hangup", out);
+          // ✅ FIX: NO DUPLICATI
           emitToUser(io, otherUserId, "webrtc:hangup", out);
 
           ack?.({ ok: true });
