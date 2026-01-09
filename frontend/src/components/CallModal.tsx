@@ -16,7 +16,10 @@ type Props = {
   roomId: number;
   otherUser: User | null;
   socket: Socket;
-  incomingOffer: IncomingOffer | null;
+
+  // Solo per callee: offer ricevuta (gestita da Chat.tsx)
+  incomingOffer?: IncomingOffer | null;
+
   onClose: () => void;
 };
 
@@ -33,7 +36,7 @@ function isSdpLike(x: unknown): x is RTCSessionDescriptionInit {
 }
 
 function isIceLike(x: unknown): x is RTCIceCandidateInit {
-  return isRecord(x); // permissivo
+  return isRecord(x);
 }
 
 export default function CallModal({
@@ -51,10 +54,12 @@ export default function CallModal({
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteStreamRef = useRef<MediaStream | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // ✅ Evita setRemoteDescription concorrenti (answer duplicata ravvicinata)
+  const applyingAnswerRef = useRef<boolean>(false);
 
   const otherLabel = otherUser
     ? otherUser.email || `User #${otherUser.id}`
@@ -73,32 +78,34 @@ export default function CallModal({
   );
 
   const cleanup = useCallback(() => {
-    // ❌ niente optional chaining in assegnazione (TS2779)
-    const pc = pcRef.current;
-    if (pc) {
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+
+    if (pcRef.current) {
       try {
-        pc.onicecandidate = null;
-        pc.ontrack = null;
-        pc.onconnectionstatechange = null;
-        pc.close();
+        pcRef.current.onicecandidate = null;
+        pcRef.current.ontrack = null;
+        pcRef.current.onconnectionstatechange = null;
+        pcRef.current.close();
       } catch {
         // ignore
       }
     }
+
     pcRef.current = null;
 
     if (localStreamRef.current) {
-      for (const t of localStreamRef.current.getTracks()) t.stop();
+      for (const t of localStreamRef.current.getTracks()) {
+        try {
+          t.stop();
+        } catch {
+          // ignore
+        }
+      }
     }
+
     localStreamRef.current = null;
-
-    if (remoteStreamRef.current) {
-      for (const t of remoteStreamRef.current.getTracks()) t.stop();
-    }
-    remoteStreamRef.current = null;
-
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    applyingAnswerRef.current = false;
   }, []);
 
   const hangup = useCallback(() => {
@@ -112,21 +119,28 @@ export default function CallModal({
   }, [cleanup, onClose, roomId, socket]);
 
   const setupPeerConnection = useCallback(async () => {
+    if (pcRef.current) {
+      try {
+        pcRef.current.close();
+      } catch {
+        // ignore
+      }
+    }
+
     const pc = new RTCPeerConnection(rtcConfig);
     pcRef.current = pc;
 
     pc.onicecandidate = (ev) => {
       if (!ev.candidate) return;
-      socket.emit("webrtc:ice", { roomId, candidate: ev.candidate.toJSON() });
+      socket.emit("webrtc:ice", { roomId, candidate: ev.candidate }, () => {
+        // ack ignored
+      });
     };
 
     pc.ontrack = (ev) => {
       const stream = ev.streams?.[0];
       if (!stream) return;
-      remoteStreamRef.current = stream;
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = stream;
-      }
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
     };
 
     pc.onconnectionstatechange = () => {
@@ -161,9 +175,7 @@ export default function CallModal({
     socket.emit("webrtc:offer", { roomId, sdp: offer }, (ackRaw: unknown) => {
       if (!ackRaw || typeof ackRaw !== "object") return;
       const ack = ackRaw as { ok?: boolean; error?: string };
-      if (ack.ok === false) {
-        setError(ack.error || "Offer non consegnata");
-      }
+      if (ack.ok === false) setError(ack.error || "Offer non consegnata");
     });
 
     setPhase("CALLING");
@@ -186,9 +198,7 @@ export default function CallModal({
         (ackRaw: unknown) => {
           if (!ackRaw || typeof ackRaw !== "object") return;
           const ack = ackRaw as { ok?: boolean; error?: string };
-          if (ack.ok === false) {
-            setError(ack.error || "Answer non consegnata");
-          }
+          if (ack.ok === false) setError(ack.error || "Answer non consegnata");
         }
       );
 
@@ -199,10 +209,9 @@ export default function CallModal({
     }
   }, [incomingOffer, roomId, setupPeerConnection, socket]);
 
-  // Listener answer (caller) ✅ ignora duplicati
+  // Listener answer (caller) ✅ anti-doppio + anti-concorrenza
   useEffect(() => {
     const onAnswer = async (payload: unknown) => {
-      // ✅ solo il caller deve processare answer
       if (role !== "caller") return;
 
       const pc = pcRef.current;
@@ -213,16 +222,19 @@ export default function CallModal({
       if (payload.roomId !== roomId) return;
       if (!isSdpLike(payload.sdp)) return;
 
-      // ✅ anti-doppio answer
+      if (applyingAnswerRef.current) return;
       if (pc.currentRemoteDescription?.type === "answer") return;
-      if (pc.signalingState === "stable") return;
+      if (pc.signalingState !== "have-local-offer") return;
 
+      applyingAnswerRef.current = true;
       try {
         await pc.setRemoteDescription(payload.sdp);
         setPhase("IN_CALL");
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Errore answer";
         setError(msg);
+      } finally {
+        applyingAnswerRef.current = false;
       }
     };
 
@@ -237,6 +249,7 @@ export default function CallModal({
     const onIce = async (payload: unknown) => {
       const pc = pcRef.current;
       if (!pc) return;
+
       if (!isRecord(payload)) return;
       if (typeof payload.roomId !== "number") return;
       if (payload.roomId !== roomId) return;
@@ -275,69 +288,88 @@ export default function CallModal({
   // Auto-start caller
   useEffect(() => {
     if (role !== "caller") return;
-    const t = window.setTimeout(() => {
-      void startCallerFlow();
-    }, 0);
-    return () => window.clearTimeout(t);
-  }, [role, startCallerFlow]);
+    void startCallerFlow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => cleanup();
-  }, [cleanup]);
+  const title =
+    role === "caller"
+      ? `Video call a ${otherLabel}`
+      : `Video call da ${otherLabel}`;
 
   return (
     <div
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.55)",
+        background: "rgba(0,0,0,0.35)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: 16,
-        zIndex: 9999,
+        zIndex: 50,
       }}
     >
       <div
         style={{
-          width: "min(1000px, 100%)",
-          background: "white",
+          width: "min(980px, 100%)",
+          background: "#fff",
           borderRadius: 12,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
           padding: 14,
-          border: "1px solid #e5e7eb",
         }}
       >
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
+            alignItems: "flex-start",
             gap: 12,
-            alignItems: "center",
           }}
         >
           <div>
-            <div style={{ fontWeight: 700 }}>
-              Video call {role === "caller" ? "a" : "da"} {otherLabel}
-            </div>
+            <div style={{ fontWeight: 700 }}>{title}</div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>
               roomId={roomId} — fase: {phase}
             </div>
+            {error && (
+              <div style={{ marginTop: 8, color: "crimson", fontSize: 12 }}>
+                {error}
+              </div>
+            )}
           </div>
 
           <div style={{ display: "flex", gap: 8 }}>
-            {role === "callee" && phase === "RINGING" && (
-              <button onClick={() => void accept()}>Accetta</button>
+            {phase === "RINGING" && role === "callee" && (
+              <button
+                onClick={() => void accept()}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  border: "1px solid #111827",
+                  background: "#111827",
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                Accetta
+              </button>
             )}
-            <button onClick={hangup}>Chiudi</button>
+
+            <button
+              onClick={hangup}
+              style={{
+                padding: "8px 10px",
+                borderRadius: 10,
+                border: "1px solid #d1d5db",
+                background: "#fff",
+                cursor: "pointer",
+              }}
+            >
+              Chiudi
+            </button>
           </div>
         </div>
-
-        {error && (
-          <div style={{ color: "red", marginTop: 10, fontSize: 13 }}>
-            {error}
-          </div>
-        )}
 
         <div
           style={{
@@ -358,8 +390,8 @@ export default function CallModal({
           >
             <video
               ref={localVideoRef}
-              autoPlay
               muted
+              autoPlay
               playsInline
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
@@ -381,10 +413,6 @@ export default function CallModal({
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           </div>
-        </div>
-
-        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-          Nota: la call voce è stata rimossa. Qui resta solo la video call.
         </div>
       </div>
     </div>
