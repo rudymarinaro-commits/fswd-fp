@@ -4,11 +4,18 @@ node_modules/
 # env
 .env
 .env.*
+backend/**/.env
+frontend/**/.env
 !.env.example
+!backend/**/.env.example
+!frontend/**/.env.example
+
 
 # build
 dist/
 build/
+coverage/
+*.log
 
 # mac
 .DS_Store
@@ -17,3 +24,4 @@ build/
 .prisma/client.DS_Store
 backend/.DS_Store
 backend/src/.DS_Store
+**/*.tsbuildinfo
