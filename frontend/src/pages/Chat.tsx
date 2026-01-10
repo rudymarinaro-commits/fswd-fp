@@ -270,6 +270,7 @@ export default function Chat() {
       setUsersError(null);
 
       try {
+        // ✅ Mantengo la tua firma di apiFetch: (path, init, token)
         const data = await apiFetch<User[]>("/users", {}, token);
         if (!cancelled) setUsers(data);
       } catch (e) {
@@ -671,6 +672,7 @@ export default function Chat() {
     <div style={{ display: "flex", height: "100vh" }}>
       <aside style={{ width: 320, padding: 12, borderRight: "1px solid #ddd" }}>
         <div style={{ marginBottom: 10 }}>
+          {/* ✅ FIX TS1003: qui il tag div è chiuso correttamente con ">" */}
           <div
             style={{
               fontWeight: 700,
@@ -689,9 +691,21 @@ export default function Chat() {
             Loggato come: {user?.email}
           </div>
 
+          {/* ✅ FIX: Admin al posto di Profilo + Logout */}
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <button onClick={() => navigate("/profile")}>Profilo</button>
-            <button onClick={() => logout()}>Logout</button>
+            {user?.role === "ADMIN" ? (
+              <button type="button" onClick={() => navigate("/admin")}>
+                Admin
+              </button>
+            ) : (
+              <button type="button" onClick={() => navigate("/profile")}>
+                Profilo
+              </button>
+            )}
+
+            <button type="button" onClick={logout}>
+              Logout
+            </button>
           </div>
         </div>
 
@@ -737,7 +751,10 @@ export default function Chat() {
                         <span style={presenceDotStyle(status)} />
                         <div>{u.email}</div>
                       </div>
-                      {unread > 0 && <span style={badgeStyle()}>{unread}</span>}
+
+                      {unread > 0 && (
+                        <span style={badgeStyle()}>{unread}</span>
+                      )}
                     </div>
 
                     <div style={{ fontSize: 12, opacity: 0.7 }}>{u.role}</div>
@@ -801,9 +818,7 @@ export default function Chat() {
                         <div style={{ fontSize: 12, opacity: 0.7 }}>
                           {formatTime(m.createdAt)}
                         </div>
-                        <div style={{ whiteSpace: "pre-wrap" }}>
-                          {m.content}
-                        </div>
+                        <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
                       </div>
                     </div>
                   );
@@ -818,9 +833,7 @@ export default function Chat() {
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={
-              room ? "Scrivi un messaggio..." : "Seleziona un utente..."
-            }
+            placeholder={room ? "Scrivi un messaggio..." : "Seleziona un utente..."}
             style={{ flex: 1 }}
             disabled={!room || sending}
             onKeyDown={(e) => {
@@ -847,9 +860,7 @@ export default function Chat() {
             boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>
-            Nuovo messaggio
-          </div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Nuovo messaggio</div>
           <div style={{ fontSize: 12, opacity: 0.7 }}>
             Da utente #{toast.otherUserId} — room #{toast.roomId}
           </div>
