@@ -1,5 +1,6 @@
 // frontend/src/pages/Chat.tsx
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -15,6 +16,10 @@ import CallModal, { type IncomingOffer } from "../components/CallModal";
 
 const API = "http://localhost:3000/api";
 const LIMIT = 30;
+
+// Badge polling: solo FE, zero modifiche backend
+const BADGE_POLL_MS = 4000;
+const BADGE_LOOKBACK_LIMIT = 10;
 
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString("it-IT", {
@@ -117,16 +122,16 @@ function presenceDotStyle(
 
   if (status === "ONLINE") return { ...base, background: "#22c55e" };
   if (status === "IDLE") return { ...base, background: "#f59e0b" };
-  return { ...base, background: "#ef4444" }; // OFFLINE: rosso (traccia)
+  return { ...base, background: "#ef4444" };
 }
 
-function badgeStyle(): CSSProperties {
+function badgeStyle(bg = "#ef4444"): CSSProperties {
   return {
     minWidth: 18,
     height: 18,
     padding: "0 6px",
     borderRadius: 999,
-    background: "#ef4444",
+    background: bg,
     color: "white",
     fontSize: 12,
     display: "inline-flex",
@@ -134,6 +139,15 @@ function badgeStyle(): CSSProperties {
     justifyContent: "center",
     lineHeight: "18px",
   };
+}
+
+function safeParseJson<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
 }
 
 export default function Chat() {
@@ -168,11 +182,49 @@ export default function Chat() {
   const [roomIdByOtherUserId, setRoomIdByOtherUserId] = useState<
     Record<number, number>
   >({});
-  const [otherUserIdByRoomId, setOtherUserIdByRoomId] = useState<
-    Record<number, number>
-  >({});
   const [unreadByRoomId, setUnreadByRoomId] = useState<Record<number, number>>(
     {}
+  );
+
+  // lastSeen persistente per badge (no backend)
+  const [lastSeenByRoomId, setLastSeenByRoomId] = useState<
+    Record<number, string>
+  >({});
+
+  const lastSeenKey = user?.id ? `fswd:lastSeenByRoom:${user.id}` : null;
+
+  useEffect(() => {
+    if (!lastSeenKey) return;
+    const saved = safeParseJson<Record<number, string>>(
+      localStorage.getItem(lastSeenKey)
+    );
+    if (saved) setLastSeenByRoomId(saved);
+  }, [lastSeenKey]);
+
+  const persistLastSeen = useCallback(
+    (next: Record<number, string>) => {
+      if (!lastSeenKey) return;
+      localStorage.setItem(lastSeenKey, JSON.stringify(next));
+    },
+    [lastSeenKey]
+  );
+
+  const markRoomSeen = useCallback(
+    (roomId: number, iso: string) => {
+      setLastSeenByRoomId((prev) => {
+        const next = { ...prev, [roomId]: iso };
+        persistLastSeen(next);
+        return next;
+      });
+
+      setUnreadByRoomId((prev) => {
+        if (!prev[roomId]) return prev;
+        const next = { ...prev };
+        delete next[roomId];
+        return next;
+      });
+    },
+    [persistLastSeen]
   );
 
   const [toast, setToast] = useState<{
@@ -181,12 +233,10 @@ export default function Chat() {
     preview: string;
   } | null>(null);
 
-  const toastTimerRef = useRef<number | null>(null);
-
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  function scrollToBottom() {
+  const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }
+  }, []);
 
   const currentRoomIdRef = useRef<number | null>(null);
   useEffect(() => {
@@ -203,11 +253,11 @@ export default function Chat() {
   const [callKey, setCallKey] = useState(0);
   const [callRole, setCallRole] = useState<"caller" | "callee">("caller");
 
-  function closeCall() {
+  const closeCall = useCallback(() => {
     setCallOpen(false);
     setIncomingOffer(null);
     setCallKey((k) => k + 1);
-  }
+  }, []);
 
   // load users
   useEffect(() => {
@@ -236,54 +286,50 @@ export default function Chat() {
     };
   }, [token]);
 
-  async function openChatWith(u: User) {
-    if (!token) return;
+  const openChatWith = useCallback(
+    async (u: User) => {
+      if (!token) return;
 
-    setSelectedUser(u);
-    setError(null);
+      setSelectedUser(u);
+      setError(null);
 
-    // ✅ reset stato UI per evitare join su room precedente e residui (stabilità)
-    setRoom(null);
-    setMessages([]);
-    setPage(1);
-    setHasMore(false);
+      // reset UI (stabilità)
+      setRoom(null);
+      setMessages([]);
+      setPage(1);
+      setHasMore(false);
 
-    try {
-      const r = await apiFetch<Room>(
-        "/rooms",
-        { method: "POST", body: JSON.stringify({ otherUserId: u.id }) },
-        token
-      );
+      try {
+        const r = await apiFetch<Room>(
+          "/rooms",
+          { method: "POST", body: JSON.stringify({ otherUserId: u.id }) },
+          token
+        );
 
-      setRoomIdByOtherUserId((prev) => ({ ...prev, [u.id]: r.id }));
-      setOtherUserIdByRoomId((prev) => ({ ...prev, [r.id]: u.id }));
+        setRoomIdByOtherUserId((prev) => ({ ...prev, [u.id]: r.id }));
+        setRoom(r);
 
-      setRoom(r);
+        const cachedMsgs = messagesByRoom[r.id] ?? [];
+        const cachedPage = pageByRoom[r.id] ?? 1;
+        const cachedHasMore = hasMoreByRoom[r.id] ?? false;
 
-      setUnreadByRoomId((prev) => {
-        const next = { ...prev };
-        delete next[r.id];
-        return next;
-      });
+        setMessages(cachedMsgs);
+        setPage(cachedPage);
+        setHasMore(cachedHasMore);
 
-      setToast((t) => (t?.roomId === r.id ? null : t));
+        // considero letto fino ad ora (poi viene raffinato quando carico messaggi)
+        markRoomSeen(r.id, new Date().toISOString());
 
-      const cachedMsgs = messagesByRoom[r.id] ?? [];
-      const cachedPage = pageByRoom[r.id] ?? 1;
-      const cachedHasMore = hasMoreByRoom[r.id] ?? false;
-
-      setMessages(cachedMsgs);
-      setPage(cachedPage);
-      setHasMore(cachedHasMore);
-
-      if (cachedMsgs.length === 0) {
-        setPage(1);
+        if (cachedMsgs.length === 0) {
+          setPage(1);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Errore apertura chat";
+        setError(msg);
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Errore apertura chat";
-      setError(msg);
-    }
-  }
+    },
+    [token, messagesByRoom, pageByRoom, hasMoreByRoom, markRoomSeen]
+  );
 
   // Load messages for current room + page
   useEffect(() => {
@@ -321,13 +367,8 @@ export default function Chat() {
         setPageByRoom((p) => ({ ...p, [room.id]: page }));
         setHasMoreByRoom((h) => ({ ...h, [room.id]: more }));
 
-        setUnreadByRoomId((prev) => {
-          const next = { ...prev };
-          delete next[room.id];
-          return next;
-        });
-
-        setToast((t) => (t?.roomId === room.id ? null : t));
+        const last = data[data.length - 1];
+        if (last) markRoomSeen(room.id, last.createdAt);
       } catch {
         if (!cancelled) setError("Impossibile caricare i messaggi");
       } finally {
@@ -339,9 +380,9 @@ export default function Chat() {
     return () => {
       cancelled = true;
     };
-  }, [token, room?.id, page]);
+  }, [token, room?.id, page, markRoomSeen]);
 
-  // joinRoom realtime (✅ SOLO joinRoom)
+  // joinRoom realtime (solo joinRoom)
   useEffect(() => {
     if (!token) return;
     if (!room?.id) return;
@@ -360,7 +401,7 @@ export default function Chat() {
     });
   }, [connected, room?.id, socket, token]);
 
-  // unread + toast on newMessage/message:new
+  // realtime messages (solo quando dentro room)
   useEffect(() => {
     if (!connected) return;
 
@@ -379,46 +420,7 @@ export default function Chat() {
       if (currentRoomId === msg.roomId) {
         setMessages((prev) => upsertAndSort(prev, [msg]));
         scrollToBottom();
-        return;
-      }
-
-      // ✅ evita badge falsi per messaggi inviati da me (multi-tab)
-      if (msg.userId === user?.id) return;
-
-      setUnreadByRoomId((prev) => ({
-        ...prev,
-        [msg.roomId]: (prev[msg.roomId] ?? 0) + 1,
-      }));
-
-      const otherUserId =
-        otherUserIdByRoomId[msg.roomId] ??
-        (msg.userId === user?.id ? null : msg.userId);
-
-      if (otherUserId) {
-        // ✅ mapping room<->otherUser per far apparire badge anche su room “non mappate”
-        setOtherUserIdByRoomId((prev) => {
-          if (prev[msg.roomId] === otherUserId) return prev;
-          if (prev[msg.roomId]) return prev;
-          return { ...prev, [msg.roomId]: otherUserId };
-        });
-
-        setRoomIdByOtherUserId((prev) => {
-          if (prev[otherUserId] === msg.roomId) return prev;
-          if (prev[otherUserId]) return prev;
-          return { ...prev, [otherUserId]: msg.roomId };
-        });
-
-        setToast({
-          otherUserId,
-          roomId: msg.roomId,
-          preview: msg.content.slice(0, 80),
-        });
-
-        if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = window.setTimeout(() => {
-          setToast(null);
-          toastTimerRef.current = null;
-        }, 5000);
+        markRoomSeen(msg.roomId, msg.createdAt);
       }
     };
 
@@ -429,16 +431,16 @@ export default function Chat() {
       socket.off("newMessage", onNewMessage);
       socket.off("message:new", onNewMessage);
     };
-  }, [connected, otherUserIdByRoomId, socket, user?.id]);
+  }, [connected, socket, scrollToBottom, markRoomSeen]);
 
   useEffect(() => {
     if (messages.length === 0) return;
     scrollToBottom();
-  }, [messages.length]);
+  }, [messages.length, scrollToBottom]);
 
   const grouped = useMemo(() => groupMessagesByDay(messages), [messages]);
 
-  async function send() {
+  const send = useCallback(async () => {
     if (!token) return;
     if (!room?.id) return;
     if (!text.trim()) return;
@@ -447,7 +449,6 @@ export default function Chat() {
     setText("");
     setError(null);
 
-    // prefer socket se connesso
     if (connected) {
       setSending(true);
 
@@ -478,6 +479,7 @@ export default function Chat() {
           if (currentRoomIdRef.current === saved.roomId) {
             setMessages((prev) => upsertAndSort(prev, [saved]));
             scrollToBottom();
+            markRoomSeen(saved.roomId, saved.createdAt);
           }
 
           setSending(false);
@@ -487,7 +489,6 @@ export default function Chat() {
       return;
     }
 
-    // fallback REST
     try {
       setSending(true);
 
@@ -513,18 +514,19 @@ export default function Chat() {
       if (currentRoomIdRef.current === saved.roomId) {
         setMessages((prev) => upsertAndSort(prev, [saved]));
         scrollToBottom();
+        markRoomSeen(saved.roomId, saved.createdAt);
       }
     } catch {
       setError("Impossibile inviare il messaggio");
     } finally {
       setSending(false);
     }
-  }
+  }, [token, room?.id, text, connected, socket, scrollToBottom, markRoomSeen]);
 
-  function loadMore() {
+  const loadMore = useCallback(() => {
     if (!hasMore) return;
     setPage((p) => p + 1);
-  }
+  }, [hasMore]);
 
   function getUnreadForUser(otherUserId: number) {
     const rid = roomIdByOtherUserId[otherUserId];
@@ -532,13 +534,7 @@ export default function Chat() {
     return unreadByRoomId[rid] ?? 0;
   }
 
-  async function openFromToast() {
-    if (!toast) return;
-    const target = users.find((u) => u.id === toast.otherUserId);
-    if (target) await openChatWith(target);
-  }
-
-  // ====== incoming call handling (offer) ======
+  // ====== incoming call handling ======
   useEffect(() => {
     if (!connected) return;
 
@@ -565,7 +561,7 @@ export default function Chat() {
     };
   }, [connected, socket, users]);
 
-  function startVideoCall() {
+  const startVideoCall = useCallback(() => {
     if (!room?.id || !selectedUser) return;
     setIncomingOffer(null);
     setCallRole("caller");
@@ -573,13 +569,122 @@ export default function Chat() {
     setCallOtherUser(selectedUser);
     setCallOpen(true);
     setCallKey((k) => k + 1);
+  }, [room?.id, selectedUser]);
+
+  // ✅ BADGE POLLING (no backend)
+  useEffect(() => {
+    if (!token) return;
+    if (!user?.id) return;
+
+    let alive = true;
+    const controller = new AbortController();
+
+    async function pollOnce() {
+      try {
+        const rooms = await apiFetch<
+          Array<Room & { user1Id: number; user2Id: number }>
+        >("/rooms/my", {}, token);
+
+        if (!alive) return;
+
+        // mapping room<->otherUser (serve per badge in lista utenti)
+        const nextRoomIdByOther: Record<number, number> = {};
+        for (const r of rooms) {
+          const otherUserId = r.user1Id === user.id ? r.user2Id : r.user1Id;
+          nextRoomIdByOther[otherUserId] = r.id;
+        }
+        setRoomIdByOtherUserId((prev) => ({ ...prev, ...nextRoomIdByOther }));
+
+        const unreadUpdates: Record<number, number> = {};
+
+        for (const r of rooms) {
+          const currentRoomId = currentRoomIdRef.current;
+          if (currentRoomId === r.id) continue;
+
+          const seenIso = lastSeenByRoomId[r.id];
+          const seenTime = seenIso ? new Date(seenIso).getTime() : 0;
+
+          const res = await fetch(
+            `${API}/rooms/${r.id}/messages?limit=${BADGE_LOOKBACK_LIMIT}&page=1`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              signal: controller.signal,
+            }
+          );
+
+          if (!res.ok) continue;
+
+          const data: Message[] = await res.json();
+          if (!alive) return;
+
+          let count = 0;
+          for (const m of data) {
+            if (m.userId === user.id) continue;
+            const t = new Date(m.createdAt).getTime();
+            if (t > seenTime) count += 1;
+          }
+
+          if (count > 0) unreadUpdates[r.id] = count;
+        }
+
+        setUnreadByRoomId((prev) => {
+          const next: Record<number, number> = { ...prev };
+
+          for (const [k, v] of Object.entries(unreadUpdates)) {
+            next[Number(k)] = v;
+          }
+
+          // elimina quelle room che ora risultano 0 e sono presenti in rooms
+          const roomIds = new Set(rooms.map((r) => r.id));
+          for (const k of Object.keys(next)) {
+            const roomId = Number(k);
+            if (!roomIds.has(roomId)) continue;
+            if (!unreadUpdates[roomId]) delete next[roomId];
+          }
+
+          return next;
+        });
+      } catch {
+        // silenzioso: il polling non deve rompere UI
+      }
+    }
+
+    const id = window.setInterval(() => void pollOnce(), BADGE_POLL_MS);
+    void pollOnce();
+
+    return () => {
+      alive = false;
+      controller.abort();
+      window.clearInterval(id);
+    };
+  }, [token, user?.id, lastSeenByRoomId]);
+
+  function getUnreadTotal() {
+    let total = 0;
+    for (const v of Object.values(unreadByRoomId)) total += v;
+    return total;
   }
+
+  const unreadTotal = getUnreadTotal();
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       <aside style={{ width: 320, padding: 12, borderRight: "1px solid #ddd" }}>
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontWeight: 700 }}>Utenti</div>
+          <div
+            style={{
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span>Utenti</span>
+            {unreadTotal > 0 && (
+              <span style={badgeStyle("#111827")}>{unreadTotal}</span>
+            )}
+          </div>
+
           <div style={{ fontSize: 12, opacity: 0.7 }}>
             Loggato come: {user?.email}
           </div>
@@ -604,7 +709,7 @@ export default function Chat() {
               return (
                 <li key={u.id} style={{ marginBottom: 6 }}>
                   <button
-                    onClick={() => openChatWith(u)}
+                    onClick={() => void openChatWith(u)}
                     style={{
                       width: "100%",
                       textAlign: "left",
@@ -728,7 +833,6 @@ export default function Chat() {
         </div>
       </main>
 
-      {/* toast */}
       {toast && (
         <div
           style={{
@@ -751,7 +855,15 @@ export default function Chat() {
           </div>
           <div style={{ marginTop: 8 }}>{toast.preview}</div>
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button onClick={() => void openFromToast()}>Apri</button>
+            <button
+              onClick={() =>
+                void openChatWith(
+                  users.find((u) => u.id === toast.otherUserId) ?? users[0]!
+                )
+              }
+            >
+              Apri
+            </button>
             <button onClick={() => setToast(null)}>Chiudi</button>
           </div>
         </div>
