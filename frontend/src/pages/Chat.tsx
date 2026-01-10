@@ -19,28 +19,82 @@ const LIMIT = 30;
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString("it-IT", {
     weekday: "long",
-    day: "numeric",
+    day: "2-digit",
     month: "long",
     year: "numeric",
   });
 }
 
+function formatTime(date: string) {
+  return new Date(date).toLocaleTimeString("it-IT", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function groupMessagesByDay(messages: Message[]) {
-  const groups: Record<string, Message[]> = {};
+  const groups: Array<{ day: string; items: Message[] }> = [];
+  let current = "";
+
   for (const m of messages) {
-    const day = new Date(m.createdAt).toDateString();
-    (groups[day] ||= []).push(m);
+    const day = formatDate(m.createdAt);
+    if (day !== current) {
+      groups.push({ day, items: [m] });
+      current = day;
+    } else {
+      groups[groups.length - 1]?.items.push(m);
+    }
   }
-  return Object.entries(groups);
+
+  return groups;
 }
 
 function upsertAndSort(prev: Message[], incoming: Message[]) {
   const map = new Map<number, Message>();
   for (const m of prev) map.set(m.id, m);
   for (const m of incoming) map.set(m.id, m);
-  return Array.from(map.values()).sort(
+
+  const arr = Array.from(map.values());
+  arr.sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
+  return arr;
+}
+
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null;
+}
+
+type JoinRoomAck = { ok: boolean; message?: string };
+
+function parseJoinAck(x: unknown): JoinRoomAck | null {
+  if (!isRecord(x)) return null;
+  if (typeof x.ok !== "boolean") return null;
+  const message = typeof x.message === "string" ? x.message : undefined;
+  return { ok: x.ok, message };
+}
+
+function isMessageLike(x: unknown): x is Message {
+  if (!isRecord(x)) return false;
+  return (
+    typeof x.id === "number" &&
+    typeof x.content === "string" &&
+    typeof x.userId === "number" &&
+    typeof x.roomId === "number" &&
+    typeof x.createdAt === "string"
+  );
+}
+
+type MessageResponse = { ok: boolean; message?: Message; error?: string };
+
+function isMessageResponse(x: unknown): x is MessageResponse {
+  if (!isRecord(x)) return false;
+  if (typeof x.ok !== "boolean") return false;
+
+  if (x.message && !isMessageLike(x.message)) return false;
+  if (x.error && typeof x.error !== "string") return false;
+
+  return true;
 }
 
 function getPresenceStatus(
@@ -63,7 +117,7 @@ function presenceDotStyle(
 
   if (status === "ONLINE") return { ...base, background: "#22c55e" };
   if (status === "IDLE") return { ...base, background: "#f59e0b" };
-  return { ...base, background: "#9ca3af" };
+  return { ...base, background: "#ef4444" }; // OFFLINE: rosso (traccia)
 }
 
 function badgeStyle(): CSSProperties {
@@ -80,55 +134,6 @@ function badgeStyle(): CSSProperties {
     justifyContent: "center",
     lineHeight: "18px",
   };
-}
-
-function isRecord(x: unknown): x is Record<string, unknown> {
-  return typeof x === "object" && x !== null;
-}
-
-function isIncomingOfferPayload(x: unknown): x is IncomingOffer {
-  if (!isRecord(x)) return false;
-  const roomIdOk = typeof x.roomId === "number";
-  const fromOk = typeof x.fromUserId === "number";
-  const modeOk = x.mode === "video" || typeof x.mode === "undefined";
-  const sdpOk =
-    isRecord(x.sdp) &&
-    x.sdp.type === "offer" &&
-    (typeof x.sdp.sdp === "string" || typeof x.sdp.sdp === "undefined");
-  return roomIdOk && fromOk && modeOk && sdpOk;
-}
-
-type JoinRoomAck = { ok: boolean; message?: string };
-type SendAck = { ok: boolean; message?: Message; error?: string };
-
-function parseJoinAck(x: unknown): JoinRoomAck | null {
-  if (!isRecord(x)) return null;
-  if (typeof x.ok !== "boolean") return null;
-  const message = typeof x.message === "string" ? x.message : undefined;
-  return { ok: x.ok, message };
-}
-
-function isMessageLike(x: unknown): x is Message {
-  if (!isRecord(x)) return false;
-  return (
-    typeof x.id === "number" &&
-    typeof x.content === "string" &&
-    typeof x.userId === "number" &&
-    typeof x.roomId === "number" &&
-    typeof x.createdAt === "string"
-  );
-}
-
-function parseSendAck(x: unknown): SendAck | null {
-  if (!isRecord(x)) return null;
-  if (typeof x.ok !== "boolean") return null;
-
-  const error = typeof x.error === "string" ? x.error : undefined;
-
-  const msgUnknown = x.message;
-  const message = isMessageLike(msgUnknown) ? msgUnknown : undefined;
-
-  return { ok: x.ok, error, message };
 }
 
 export default function Chat() {
@@ -175,6 +180,7 @@ export default function Chat() {
     roomId: number;
     preview: string;
   } | null>(null);
+
   const toastTimerRef = useRef<number | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -187,40 +193,29 @@ export default function Chat() {
     currentRoomIdRef.current = room?.id ?? null;
   }, [room?.id]);
 
-  const inflightRoomReqRef = useRef<Map<number, Promise<Room>>>(new Map());
+  // ====== VIDEO CALL ======
+  const [callOpen, setCallOpen] = useState(false);
+  const [callRoomId, setCallRoomId] = useState<number | null>(null);
+  const [callOtherUser, setCallOtherUser] = useState<User | null>(null);
+  const [incomingOffer, setIncomingOffer] = useState<IncomingOffer | null>(
+    null
+  );
+  const [callKey, setCallKey] = useState(0);
+  const [callRole, setCallRole] = useState<"caller" | "callee">("caller");
 
-  async function ensureRoomForOtherUser(otherUserId: number): Promise<Room> {
-    if (!token) throw new Error("No token");
-
-    const inflight = inflightRoomReqRef.current.get(otherUserId);
-    if (inflight) return inflight;
-
-    const p = apiFetch<Room>(
-      "/rooms",
-      { method: "POST", body: JSON.stringify({ otherUserId }) },
-      token
-    )
-      .then((r) => {
-        setRoomIdByOtherUserId((prev) => ({ ...prev, [otherUserId]: r.id }));
-        setOtherUserIdByRoomId((prev) => ({ ...prev, [r.id]: otherUserId }));
-        inflightRoomReqRef.current.delete(otherUserId);
-        return r;
-      })
-      .catch((e) => {
-        inflightRoomReqRef.current.delete(otherUserId);
-        throw e;
-      });
-
-    inflightRoomReqRef.current.set(otherUserId, p);
-    return p;
+  function closeCall() {
+    setCallOpen(false);
+    setIncomingOffer(null);
+    setCallKey((k) => k + 1);
   }
 
-  // Load users
+  // load users
   useEffect(() => {
+    if (!token) return;
+
     let cancelled = false;
 
     (async () => {
-      if (!token) return;
       setUsersLoading(true);
       setUsersError(null);
 
@@ -241,25 +236,17 @@ export default function Chat() {
     };
   }, [token]);
 
-  // Prefetch rooms
-  useEffect(() => {
-    if (!token) return;
-    if (!user?.id) return;
-    if (users.length === 0) return;
-
-    const others = users.filter((u) => u.id !== user.id);
-    for (const u of others) {
-      if (roomIdByOtherUserId[u.id]) continue;
-      ensureRoomForOtherUser(u.id).catch(() => {});
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, user?.id, users]);
-
   async function openChatWith(u: User) {
     if (!token) return;
 
     setSelectedUser(u);
     setError(null);
+
+    // ✅ reset stato UI per evitare join su room precedente e residui (stabilità)
+    setRoom(null);
+    setMessages([]);
+    setPage(1);
+    setHasMore(false);
 
     try {
       const r = await apiFetch<Room>(
@@ -289,22 +276,23 @@ export default function Chat() {
       setPage(cachedPage);
       setHasMore(cachedHasMore);
 
-      if (!messagesByRoom[r.id]) setPage(1);
+      if (cachedMsgs.length === 0) {
+        setPage(1);
+      }
     } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : "Errore creazione/recupero room";
+      const msg = e instanceof Error ? e.message : "Errore apertura chat";
       setError(msg);
     }
   }
 
-  // Load messages
+  // Load messages for current room + page
   useEffect(() => {
+    if (!token) return;
+    if (!room?.id) return;
+
     let cancelled = false;
 
     async function load() {
-      if (!token) return;
-      if (!room?.id) return;
-
       setLoadingMsgs(true);
       setError(null);
 
@@ -319,17 +307,27 @@ export default function Chat() {
         const data: Message[] = await res.json();
         if (cancelled) return;
 
-        setMessages((prev) => {
-          const merged = upsertAndSort(prev, data);
-          setMessagesByRoom((m) => ({ ...m, [room.id]: merged }));
-          return merged;
+        setMessagesByRoom((prev) => {
+          const roomMsgs = prev[room.id] ?? [];
+          const merged = upsertAndSort(roomMsgs, data);
+          return { ...prev, [room.id]: merged };
         });
 
         const more = data.length === LIMIT;
+
+        setMessages((prev) => upsertAndSort(prev, data));
         setHasMore(more);
 
         setPageByRoom((p) => ({ ...p, [room.id]: page }));
         setHasMoreByRoom((h) => ({ ...h, [room.id]: more }));
+
+        setUnreadByRoomId((prev) => {
+          const next = { ...prev };
+          delete next[room.id];
+          return next;
+        });
+
+        setToast((t) => (t?.roomId === room.id ? null : t));
       } catch {
         if (!cancelled) setError("Impossibile caricare i messaggi");
       } finally {
@@ -343,7 +341,7 @@ export default function Chat() {
     };
   }, [token, room?.id, page]);
 
-  // joinRoom realtime
+  // joinRoom realtime (✅ SOLO joinRoom)
   useEffect(() => {
     if (!token) return;
     if (!room?.id) return;
@@ -352,13 +350,13 @@ export default function Chat() {
     socket.emit("joinRoom", room.id, (ackRaw: unknown) => {
       const ack = parseJoinAck(ackRaw);
       if (!ack) return;
-      if (!ack.ok) setError(ack.message || "Errore joinRoom");
-    });
 
-    socket.emit("room:join", room.id, (ackRaw: unknown) => {
-      const ack = parseJoinAck(ackRaw);
-      if (!ack) return;
-      if (!ack.ok) setError(ack.message || "Errore room:join");
+      if (!ack.ok) {
+        setError(ack.message || "Errore joinRoom");
+        return;
+      }
+
+      setError(null);
     });
   }, [connected, room?.id, socket, token]);
 
@@ -384,6 +382,9 @@ export default function Chat() {
         return;
       }
 
+      // ✅ evita badge falsi per messaggi inviati da me (multi-tab)
+      if (msg.userId === user?.id) return;
+
       setUnreadByRoomId((prev) => ({
         ...prev,
         [msg.roomId]: (prev[msg.roomId] ?? 0) + 1,
@@ -394,6 +395,19 @@ export default function Chat() {
         (msg.userId === user?.id ? null : msg.userId);
 
       if (otherUserId) {
+        // ✅ mapping room<->otherUser per far apparire badge anche su room “non mappate”
+        setOtherUserIdByRoomId((prev) => {
+          if (prev[msg.roomId] === otherUserId) return prev;
+          if (prev[msg.roomId]) return prev;
+          return { ...prev, [msg.roomId]: otherUserId };
+        });
+
+        setRoomIdByOtherUserId((prev) => {
+          if (prev[otherUserId] === msg.roomId) return prev;
+          if (prev[otherUserId]) return prev;
+          return { ...prev, [otherUserId]: msg.roomId };
+        });
+
         setToast({
           otherUserId,
           roomId: msg.roomId,
@@ -417,7 +431,6 @@ export default function Chat() {
     };
   }, [connected, otherUserIdByRoomId, socket, user?.id]);
 
-  // scroll bottom on messages
   useEffect(() => {
     if (messages.length === 0) return;
     scrollToBottom();
@@ -425,59 +438,59 @@ export default function Chat() {
 
   const grouped = useMemo(() => groupMessagesByDay(messages), [messages]);
 
-  // Presence ping (keepalive)
-  useEffect(() => {
-    if (!connected) return;
-
-    const t = window.setInterval(() => {
-      socket.emit("presence:ping");
-    }, 20_000);
-
-    return () => window.clearInterval(t);
-  }, [connected, socket]);
-
   async function send() {
     if (!token) return;
     if (!room?.id) return;
+    if (!text.trim()) return;
 
     const content = text.trim();
-    if (!content) return;
-
-    setSending(true);
+    setText("");
     setError(null);
 
+    // prefer socket se connesso
     if (connected) {
+      setSending(true);
+
       socket.emit(
         "sendMessage",
         { roomId: room.id, content },
         (ackRaw: unknown) => {
-          try {
-            const ack = parseSendAck(ackRaw);
-            if (!ack?.ok || !ack.message) {
-              setError(ack?.error || "Errore invio messaggio (socket)");
-              return;
-            }
-
-            const saved = ack.message;
-            setText("");
-
-            setMessages((prev) => {
-              const merged = upsertAndSort(prev, [saved]);
-              setMessagesByRoom((m) => ({ ...m, [room.id]: merged }));
-              return merged;
-            });
-
-            scrollToBottom();
-          } finally {
+          if (!isMessageResponse(ackRaw)) {
+            setError("Errore invio messaggio");
             setSending(false);
+            return;
           }
+
+          if (!ackRaw.ok || !ackRaw.message) {
+            setError(ackRaw.error || "Errore invio messaggio");
+            setSending(false);
+            return;
+          }
+
+          const saved = ackRaw.message;
+
+          setMessagesByRoom((prev) => {
+            const roomMsgs = prev[saved.roomId] ?? [];
+            const merged = upsertAndSort(roomMsgs, [saved]);
+            return { ...prev, [saved.roomId]: merged };
+          });
+
+          if (currentRoomIdRef.current === saved.roomId) {
+            setMessages((prev) => upsertAndSort(prev, [saved]));
+            scrollToBottom();
+          }
+
+          setSending(false);
         }
       );
 
       return;
     }
 
+    // fallback REST
     try {
+      setSending(true);
+
       const res = await fetch(`${API}/messages`, {
         method: "POST",
         headers: {
@@ -490,20 +503,27 @@ export default function Chat() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const saved: Message = await res.json();
-      setText("");
 
-      setMessages((prev) => {
-        const merged = upsertAndSort(prev, [saved]);
-        setMessagesByRoom((m) => ({ ...m, [room.id]: merged }));
-        return merged;
+      setMessagesByRoom((prev) => {
+        const roomMsgs = prev[saved.roomId] ?? [];
+        const merged = upsertAndSort(roomMsgs, [saved]);
+        return { ...prev, [saved.roomId]: merged };
       });
 
-      scrollToBottom();
+      if (currentRoomIdRef.current === saved.roomId) {
+        setMessages((prev) => upsertAndSort(prev, [saved]));
+        scrollToBottom();
+      }
     } catch {
-      setError("Errore invio messaggio");
+      setError("Impossibile inviare il messaggio");
     } finally {
       setSending(false);
     }
+  }
+
+  function loadMore() {
+    if (!hasMore) return;
+    setPage((p) => p + 1);
   }
 
   function getUnreadForUser(otherUserId: number) {
@@ -518,127 +538,60 @@ export default function Chat() {
     if (target) await openChatWith(target);
   }
 
-  // =====================
-  // CALL STATE
-  // =====================
-  const [callOpen, setCallOpen] = useState(false);
-  const [callKey, setCallKey] = useState<string>("");
-  const [callRole, setCallRole] = useState<"caller" | "callee">("caller");
-  const [incomingOffer, setIncomingOffer] = useState<IncomingOffer | null>(
-    null
-  );
-  const [callRoomId, setCallRoomId] = useState<number | null>(null);
-  const [callOtherUser, setCallOtherUser] = useState<User | null>(null);
-
-  function closeCall() {
-    setCallOpen(false);
-    setIncomingOffer(null);
-    setCallRoomId(null);
-    setCallOtherUser(null);
-    setCallKey("");
-  }
-
-  function startVideoCall() {
-    if (!room?.id || !selectedUser) {
-      setError("Seleziona prima un utente");
-      return;
-    }
-    if (!connected) {
-      setError("Socket non connesso (attendi qualche secondo e riprova)");
-      return;
-    }
-
-    setError(null);
-    setCallRole("caller");
-    setCallRoomId(room.id);
-    setCallOtherUser(selectedUser);
-    setIncomingOffer(null);
-    setCallKey(`${Date.now()}-video-caller`);
-    setCallOpen(true);
-  }
-
-  // ✅ LISTENER OFFER (callee)
+  // ====== incoming call handling (offer) ======
   useEffect(() => {
     if (!connected) return;
 
-    const onOffer = (payload: unknown) => {
-      if (!isIncomingOfferPayload(payload)) return;
+    const onIncomingOffer = (payload: unknown) => {
+      if (!isRecord(payload)) return;
+      const roomId = payload.roomId;
+      const fromUserId = payload.fromUserId;
 
-      // ✅ Se c’è già una call davvero attiva (modal aperta + room valorizzata), ignora.
-      // ✅ Se callOpen è true ma callRoomId è null (stato incoerente), NON bloccare le nuove offer.
-      if (callOpen && callRoomId) return;
+      if (typeof roomId !== "number" || typeof fromUserId !== "number") return;
 
-      const other = users.find((u) => u.id === payload.fromUserId) ?? null;
+      const fromUser = users.find((u) => u.id === fromUserId) ?? null;
 
+      setIncomingOffer(payload as IncomingOffer);
       setCallRole("callee");
-      setCallRoomId(payload.roomId);
-      setCallOtherUser(other);
-      setIncomingOffer(payload);
-      setCallKey(`${Date.now()}-video-callee`);
+      setCallRoomId(roomId);
+      setCallOtherUser(fromUser);
       setCallOpen(true);
+      setCallKey((k) => k + 1);
     };
 
-    socket.on("webrtc:offer", onOffer);
+    socket.on("webrtc:offer", onIncomingOffer);
     return () => {
-      socket.off("webrtc:offer", onOffer);
+      socket.off("webrtc:offer", onIncomingOffer);
     };
-  }, [callOpen, callRoomId, connected, socket, users]);
+  }, [connected, socket, users]);
+
+  function startVideoCall() {
+    if (!room?.id || !selectedUser) return;
+    setIncomingOffer(null);
+    setCallRole("caller");
+    setCallRoomId(room.id);
+    setCallOtherUser(selectedUser);
+    setCallOpen(true);
+    setCallKey((k) => k + 1);
+  }
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
-      <aside
-        style={{
-          width: 300,
-          borderRight: "1px solid #ddd",
-          padding: 12,
-          overflow: "auto",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <strong>Utenti</strong>
-          <button onClick={() => navigate("/profile")}>Profilo</button>
-        </div>
-
-        <div style={{ margin: "8px 0" }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
+      <aside style={{ width: 320, padding: 12, borderRight: "1px solid #ddd" }}>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontWeight: 700 }}>Utenti</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
             Loggato come: {user?.email}
           </div>
-          {user?.role === "ADMIN" && (
-            <button onClick={() => navigate("/admin")}>Admin</button>
-          )}
-          <button onClick={logout} style={{ marginLeft: 8 }}>
-            Logout
-          </button>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button onClick={() => navigate("/profile")}>Profilo</button>
+            <button onClick={() => logout()}>Logout</button>
+          </div>
         </div>
 
-        {toast && (
-          <button
-            onClick={openFromToast}
-            style={{
-              width: "100%",
-              textAlign: "left",
-              padding: "8px 10px",
-              border: "1px solid #ddd",
-              borderRadius: 8,
-              background: "#fff7ed",
-              cursor: "pointer",
-              marginBottom: 10,
-            }}
-            title="Apri la chat"
-          >
-            <div style={{ fontWeight: 600, fontSize: 12 }}>Nuovo messaggio</div>
-            <div style={{ fontSize: 12, opacity: 0.85 }}>{toast.preview}</div>
-          </button>
-        )}
-
-        {usersLoading && <div>Caricamento utenti...</div>}
-        {usersError && <div style={{ color: "red" }}>{usersError}</div>}
+        {usersLoading && <div>Caricamento...</div>}
+        {usersError && <div style={{ color: "crimson" }}>{usersError}</div>}
 
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
           {users
@@ -691,73 +644,72 @@ export default function Chat() {
       </aside>
 
       <main style={{ flex: 1, padding: 12, overflow: "auto" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
           <h2 style={{ margin: 0 }}>
             {selectedUser
               ? `Chat con ${selectedUser.email}`
               : "Seleziona un utente"}
           </h2>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>
-              {room ? `roomId=${room.id}` : ""}
-            </div>
-
-            <button disabled={!room || !connected} onClick={startVideoCall}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={startVideoCall} disabled={!room || !selectedUser}>
               Video
             </button>
           </div>
         </div>
 
-        {error && <div style={{ color: "red", marginTop: 8 }}>{error}</div>}
+        {error && <div style={{ color: "crimson", marginTop: 6 }}>{error}</div>}
 
-        {room && hasMore && (
-          <button
-            onClick={() => setPage((p) => p + 1)}
-            disabled={loadingMsgs}
-            style={{ marginTop: 10 }}
-          >
-            {loadingMsgs ? "Carico..." : "Carica altri"}
-          </button>
-        )}
+        <div style={{ marginTop: 12 }}>
+          {hasMore && (
+            <button onClick={loadMore} style={{ marginBottom: 8 }}>
+              Carica altri
+            </button>
+          )}
 
-        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-          {grouped.map(([day, msgs]) => (
-            <section key={day}>
-              <div style={{ opacity: 0.7, marginBottom: 6 }}>
-                {formatDate(new Date(day).toISOString())}
-              </div>
-              <div style={{ display: "grid", gap: 8 }}>
-                {msgs.map((m) => (
-                  <div
-                    key={m.id}
-                    style={{
-                      padding: 10,
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                    }}
-                  >
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>
-                      userId: {m.userId} —{" "}
-                      {new Date(m.createdAt).toLocaleString("it-IT")}
+          {loadingMsgs && <div>Caricamento messaggi...</div>}
+
+          {grouped.map((g) => (
+            <div key={g.day} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>{g.day}</div>
+
+              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                {g.items.map((m) => {
+                  const mine = m.userId === user?.id;
+                  return (
+                    <div
+                      key={m.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: mine ? "flex-end" : "flex-start",
+                      }}
+                    >
+                      <div
+                        style={{
+                          maxWidth: "70%",
+                          border: "1px solid #ddd",
+                          borderRadius: 10,
+                          padding: "8px 10px",
+                          background: mine ? "#eff6ff" : "white",
+                        }}
+                      >
+                        <div style={{ fontSize: 12, opacity: 0.7 }}>
+                          {formatTime(m.createdAt)}
+                        </div>
+                        <div style={{ whiteSpace: "pre-wrap" }}>
+                          {m.content}
+                        </div>
+                      </div>
                     </div>
-                    <div>{m.content}</div>
-                  </div>
-                ))}
+                  );
+                })}
+                <div ref={bottomRef} />
               </div>
-            </section>
+            </div>
           ))}
-          <div ref={bottomRef} />
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -775,6 +727,35 @@ export default function Chat() {
           </button>
         </div>
       </main>
+
+      {/* toast */}
+      {toast && (
+        <div
+          style={{
+            position: "fixed",
+            right: 18,
+            bottom: 18,
+            border: "1px solid #ddd",
+            background: "white",
+            borderRadius: 10,
+            padding: 12,
+            width: 320,
+            boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            Nuovo messaggio
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
+            Da utente #{toast.otherUserId} — room #{toast.roomId}
+          </div>
+          <div style={{ marginTop: 8 }}>{toast.preview}</div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button onClick={() => void openFromToast()}>Apri</button>
+            <button onClick={() => setToast(null)}>Chiudi</button>
+          </div>
+        </div>
+      )}
 
       {callOpen && callRoomId && (
         <CallModal
