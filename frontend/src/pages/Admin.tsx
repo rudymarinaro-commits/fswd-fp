@@ -1,44 +1,48 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "../hooks/useAuth";
 import { apiFetch } from "../services/api";
-import type { Role, User } from "../types/api";
+import { useAuth } from "../hooks/useAuth";
+import type { User } from "../types/api";
+
+function hasMessage(x: unknown): x is { message: unknown } {
+  return typeof x === "object" && x !== null && "message" in x;
+}
+
+function getErrorMessage(err: unknown, fallback: string) {
+  if (err instanceof Error && err.message) return err.message;
+  if (hasMessage(err) && typeof err.message === "string") return err.message;
+  return fallback;
+}
 
 export default function Admin() {
   const { token } = useAuth();
-
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // create form
+  // form creazione
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("USER");
-
+  const [role, setRole] = useState<"USER" | "ADMIN">("USER");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
 
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-
-  async function loadUsers() {
+  async function load() {
     if (!token) return;
     setLoading(true);
     setMsg(null);
     try {
       const data = await apiFetch<User[]>("/admin/users", {}, token);
       setUsers(data);
-    } catch (e: any) {
-      setMsg(`❌ ${e?.message || "Errore caricamento utenti"}`);
+    } catch (e: unknown) {
+      setMsg(`❌ ${getErrorMessage(e, "Errore caricamento utenti")}`);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadUsers();
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -47,38 +51,32 @@ export default function Admin() {
     setMsg(null);
 
     try {
-      const payload = {
-        email,
-        password,
-        role,
-        firstName,
-        lastName,
-        username,
-        phone,
-        address,
-        avatarUrl,
-      };
-
-      await apiFetch<User>(
+      const created = await apiFetch<User>(
         "/admin/users",
-        { method: "POST", body: JSON.stringify(payload) },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            email,
+            password,
+            role,
+            firstName,
+            lastName,
+            username,
+          }),
+        },
         token
       );
 
+      setUsers((prev) => [created, ...prev]);
       setEmail("");
       setPassword("");
       setRole("USER");
       setFirstName("");
       setLastName("");
       setUsername("");
-      setPhone("");
-      setAddress("");
-      setAvatarUrl("");
-
       setMsg("✅ Utente creato");
-      await loadUsers();
-    } catch (e: any) {
-      setMsg(`❌ ${e?.message || "Errore creazione utente"}`);
+    } catch (e: unknown) {
+      setMsg(`❌ ${getErrorMessage(e, "Errore creazione utente")}`);
     }
   }
 
@@ -86,45 +84,64 @@ export default function Admin() {
     if (!token) return;
     setMsg(null);
 
+    if (
+      !confirm(
+        "Eliminare utente? (verranno eliminate anche room/messaggi collegati)"
+      )
+    )
+      return;
+
     try {
       await apiFetch<void>(`/admin/users/${id}`, { method: "DELETE" }, token);
-      setMsg("Utente eliminato");
-      await loadUsers();
-    } catch (e: any) {
-      setMsg(`❌ ${e?.message || "Errore eliminazione utente"}`);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+      setMsg("✅ Utente eliminato");
+    } catch (e: unknown) {
+      setMsg(`❌ ${getErrorMessage(e, "Errore eliminazione utente")}`);
     }
   }
 
   async function resetPassword(id: number) {
     if (!token) return;
-    const pwd = prompt("Nuova password (min 6 caratteri):");
-    if (!pwd) return;
+    setMsg(null);
+
+    const newPass = prompt("Nuova password (min 6 caratteri):");
+    if (!newPass) return;
 
     try {
       await apiFetch<User>(
         `/admin/users/${id}`,
-        { method: "PATCH", body: JSON.stringify({ password: pwd }) },
+        { method: "PATCH", body: JSON.stringify({ password: newPass }) },
         token
       );
-      setMsg("🔝Password aggiornata");
-    } catch (e: any) {
-      setMsg(`❌ ${e?.message || "Errore reset password"}`);
+      setMsg("✅ Password resettata");
+    } catch (e: unknown) {
+      setMsg(`❌ ${getErrorMessage(e, "Errore reset password")}`);
     }
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "20px auto", display: "grid", gap: 16 }}>
-      <h2>Admin - Lista utenti</h2>
+    <div
+      style={{ maxWidth: 900, margin: "20px auto", display: "grid", gap: 16 }}
+    >
+      <h2>Admin</h2>
 
       {msg && <div>{msg}</div>}
 
-      <section style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12 }}>
-        <h3 style={{ marginTop: 0 }}>Crea nuovo utente</h3>
+      <section
+        style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12 }}
+      >
+        <h3 style={{ marginTop: 0 }}>Crea utente</h3>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div
+          style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr" }}
+        >
           <label>
             Email
-            <input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} />
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{ width: "100%" }}
+            />
           </label>
 
           <label>
@@ -138,88 +155,99 @@ export default function Admin() {
           </label>
 
           <label>
-            Nome
-            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} style={{ width: "100%" }} />
-          </label>
-
-          <label>
-            Cognome
-            <input value={lastName} onChange={(e) => setLastName(e.target.value)} style={{ width: "100%" }} />
-          </label>
-
-          <label>
-            Username (non univoco)
-            <input value={username} onChange={(e) => setUsername(e.target.value)} style={{ width: "100%" }} />
-          </label>
-
-          <label>
             Ruolo
-            <select value={role} onChange={(e) => setRole(e.target.value as Role)} style={{ width: "100%" }}>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as "USER" | "ADMIN")}
+              style={{ width: "100%" }}
+            >
               <option value="USER">USER</option>
               <option value="ADMIN">ADMIN</option>
             </select>
           </label>
 
           <label>
-            Telefono (facoltativo)
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} />
+            Nome
+            <input
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              style={{ width: "100%" }}
+            />
           </label>
 
           <label>
-            Indirizzo (facoltativo)
-            <input value={address} onChange={(e) => setAddress(e.target.value)} style={{ width: "100%" }} />
+            Cognome
+            <input
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              style={{ width: "100%" }}
+            />
           </label>
 
-          <label style={{ gridColumn: "1 / -1" }}>
-            Immagine profilo (URL facoltativo)
-            <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} style={{ width: "100%" }} />
+          <label>
+            Username (non univoco)
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              style={{ width: "100%" }}
+            />
           </label>
         </div>
 
-        <button onClick={create} style={{ marginTop: 12, padding: "10px 12px" }}>
+        <button onClick={create} style={{ marginTop: 10 }}>
           Crea
         </button>
       </section>
 
-      <section style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12 }}>
-        <h3 style={{ marginTop: 0 }}>Utenti ({users.length})</h3>
+      <section
+        style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12 }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h3 style={{ margin: 0 }}>Utenti</h3>
+          <button onClick={load} disabled={loading}>
+            {loading ? "Carico..." : "Ricarica"}
+          </button>
+        </div>
 
         {loading ? (
-          <div>Caricamento...</div>
+          <p>Caricamento...</p>
         ) : (
-          <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
             {users.map((u) => (
               <div
                 key={u.id}
                 style={{
                   border: "1px solid #eee",
-                  borderRadius: 12,
-                  padding: 12,
+                  borderRadius: 10,
+                  padding: 10,
                   display: "flex",
                   justifyContent: "space-between",
-                  gap: 12,
+                  gap: 10,
                 }}
               >
-                <div style={{ display: "grid", gap: 4 }}>
-                  <div>
-                    <strong>{u.email}</strong> — {u.role}
+                <div>
+                  <div style={{ fontWeight: 600 }}>
+                    {u.email} — {u.role}
                   </div>
-                  <div style={{ fontSize: 13, opacity: 0.85 }}>
-                    {u.firstName} {u.lastName} • username: {u.username}
+                  <div style={{ fontSize: 13, opacity: 0.8 }}>
+                    {u.firstName ?? ""} {u.lastName ?? ""} — @{u.username ?? ""}
                   </div>
-                  <div style={{ fontSize: 13, opacity: 0.85 }}>
-                    tel: {u.phone ?? "-"} • indirizzo: {u.address ?? "-"}
-                  </div>
-                  {u.avatarUrl && (
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>
-                      avatarUrl: {u.avatarUrl}
-                    </div>
-                  )}
                 </div>
 
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button onClick={() => resetPassword(u.id)}>Reset password</button>
-                  <button onClick={() => remove(u.id)} style={{ color: "crimson" }}>
+                  <button onClick={() => resetPassword(u.id)}>
+                    Reset password
+                  </button>
+                  <button
+                    onClick={() => remove(u.id)}
+                    style={{ color: "crimson" }}
+                  >
                     Elimina
                   </button>
                 </div>

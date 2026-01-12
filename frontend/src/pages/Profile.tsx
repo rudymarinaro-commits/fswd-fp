@@ -3,6 +3,28 @@ import { useAuth } from "../hooks/useAuth";
 import { apiFetch } from "../services/api";
 import type { User } from "../types/api";
 
+type UpdateMePayload = {
+  email: string;
+  firstName: string;
+  lastName: string;
+  username: string;
+  phone: string;
+  address: string;
+  avatarUrl: string;
+  currentPassword?: string;
+  newPassword?: string;
+};
+
+function hasMessage(x: unknown): x is { message: unknown } {
+  return typeof x === "object" && x !== null && "message" in x;
+}
+
+function getErrorMessage(err: unknown, fallback: string) {
+  if (err instanceof Error && err.message) return err.message;
+  if (hasMessage(err) && typeof err.message === "string") return err.message;
+  return fallback;
+}
+
 export default function Profile() {
   const { token, user, refreshMe } = useAuth();
 
@@ -38,7 +60,7 @@ export default function Profile() {
     setMsg(null);
 
     try {
-      const payload: any = {
+      const payload: UpdateMePayload = {
         email,
         firstName,
         lastName,
@@ -48,7 +70,6 @@ export default function Profile() {
         avatarUrl,
       };
 
-      // Cambio password solo se compilata
       if (currentPassword || newPassword) {
         payload.currentPassword = currentPassword;
         payload.newPassword = newPassword;
@@ -68,59 +89,95 @@ export default function Profile() {
 
       await refreshMe();
       setMsg("✅ Profilo aggiornato");
-    } catch (e: any) {
-      setMsg(`❌ ${e?.message || "Errore aggiornamento profilo"}`);
+    } catch (e: unknown) {
+      setMsg(`❌ ${getErrorMessage(e, "Errore aggiornamento profilo")}`);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 520, margin: "20px auto", display: "grid", gap: 10 }}>
+    <div
+      style={{ maxWidth: 520, margin: "20px auto", display: "grid", gap: 10 }}
+    >
       <h2>Profilo</h2>
 
       {msg && <div>{msg}</div>}
 
       <label>
         Email (univoca)
-        <input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} />
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ width: "100%" }}
+        />
       </label>
 
       <label>
         Nome
-        <input value={firstName} onChange={(e) => setFirstName(e.target.value)} style={{ width: "100%" }} />
+        <input
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          style={{ width: "100%" }}
+        />
       </label>
 
       <label>
         Cognome
-        <input value={lastName} onChange={(e) => setLastName(e.target.value)} style={{ width: "100%" }} />
+        <input
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          style={{ width: "100%" }}
+        />
       </label>
 
       <label>
         Username (non univoco)
-        <input value={username} onChange={(e) => setUsername(e.target.value)} style={{ width: "100%" }} />
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          style={{ width: "100%" }}
+        />
       </label>
 
       <label>
         Telefono (facoltativo)
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} />
+        <input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          style={{ width: "100%" }}
+        />
       </label>
 
       <label>
         Indirizzo (facoltativo)
-        <input value={address} onChange={(e) => setAddress(e.target.value)} style={{ width: "100%" }} />
+        <input
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          style={{ width: "100%" }}
+        />
       </label>
 
       <label>
         Immagine profilo (URL facoltativo)
-        <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} style={{ width: "100%" }} />
+        <input
+          value={avatarUrl}
+          onChange={(e) => setAvatarUrl(e.target.value)}
+          style={{ width: "100%" }}
+        />
       </label>
 
-      {avatarUrl?.trim() && (
+      {avatarUrl.trim() && (
         <img
           src={avatarUrl}
           alt="avatar"
-          style={{ width: 90, height: 90, objectFit: "cover", borderRadius: 12, border: "1px solid #ddd" }}
+          style={{
+            width: 90,
+            height: 90,
+            objectFit: "cover",
+            borderRadius: 12,
+            border: "1px solid #ddd",
+          }}
         />
       )}
 
