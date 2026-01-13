@@ -1,0 +1,282 @@
+.layout {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+}
+
+.sidebar {
+  width: 320px;
+  padding: 12px;
+  border-right: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  overflow: auto;
+}
+
+.sidebarHeader {
+  margin-bottom: 10px;
+}
+
+.sidebarTitleRow {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loggedAs {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.sidebarActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.sidebarError {
+  color: var(--danger);
+  margin-top: 8px;
+}
+
+.usersList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.userItem {
+  margin: 0;
+}
+
+.userButton {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+
+.userButton:hover {
+  border-color: rgba(229, 231, 235, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.userButtonActive {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.userTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.userIdentity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.userEmail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userRole {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.presenceDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.presenceOnline {
+  background: #22c55e;
+}
+
+.presenceIdle {
+  background: #f59e0b;
+}
+
+.presenceOffline {
+  background: #ef4444;
+}
+
+.badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: white;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 18px;
+}
+
+.badgeUnread {
+  background: #ef4444;
+}
+
+.badgeTotal {
+  background: #111827;
+}
+
+.main {
+  flex: 1;
+  padding: 12px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.error {
+  color: var(--danger);
+  margin-top: 6px;
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin-top: 12px;
+  padding-right: 4px;
+}
+
+.loadMore {
+  margin-bottom: 8px;
+}
+
+.loading {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.dayGroup {
+  margin-bottom: 14px;
+}
+
+.dayLabel {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.msgGrid {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.msgRow {
+  display: flex;
+}
+
+.msgRowMine {
+  justify-content: flex-end;
+}
+
+.msgRowOther {
+  justify-content: flex-start;
+}
+
+.bubble {
+  max-width: 70%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.bubbleMine {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.msgMeta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.msgBody {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.composer {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.composerInput {
+  flex: 1;
+}
+
+.toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  border: 1px solid var(--border);
+  background: rgba(17, 26, 46, 0.96);
+  border-radius: 12px;
+  padding: 12px;
+  width: 320px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.toastTitle {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.toastMeta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.toastPreview {
+  margin-top: 8px;
+}
+
+.toastActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}

@@ -1,18 +1,12 @@
 // frontend/src/pages/Chat.tsx
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import type { Message, Room, User } from "../types/api";
 import { apiFetch } from "../services/api";
 import { useSocket } from "../contexts/useSocket";
 import CallModal, { type IncomingOffer } from "../components/CallModal";
+import styles from "./Chat.module.css";
 
 const API = "http://localhost:3000/api";
 const LIMIT = 30;
@@ -109,38 +103,6 @@ function getPresenceStatus(
   return map[userId] ?? "OFFLINE";
 }
 
-function presenceDotStyle(
-  status: "ONLINE" | "IDLE" | "OFFLINE"
-): CSSProperties {
-  const base: CSSProperties = {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    display: "inline-block",
-    flexShrink: 0,
-  };
-
-  if (status === "ONLINE") return { ...base, background: "#22c55e" };
-  if (status === "IDLE") return { ...base, background: "#f59e0b" };
-  return { ...base, background: "#ef4444" };
-}
-
-function badgeStyle(bg = "#ef4444"): CSSProperties {
-  return {
-    minWidth: 18,
-    height: 18,
-    padding: "0 6px",
-    borderRadius: 999,
-    background: bg,
-    color: "white",
-    fontSize: 12,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    lineHeight: "18px",
-  };
-}
-
 function safeParseJson<T>(raw: string | null): T | null {
   if (!raw) return null;
   try {
@@ -148,6 +110,14 @@ function safeParseJson<T>(raw: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+function presenceClass(
+  status: "ONLINE" | "IDLE" | "OFFLINE"
+): string | undefined {
+  if (status === "ONLINE") return styles.presenceOnline;
+  if (status === "IDLE") return styles.presenceIdle;
+  return styles.presenceOffline;
 }
 
 export default function Chat() {
@@ -171,9 +141,9 @@ export default function Chat() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
 
-  const [messagesByRoom, setMessagesByRoom] = useState<
-    Record<number, Message[]>
-  >({});
+  const [messagesByRoom, setMessagesByRoom] = useState<Record<number, Message[]>>(
+    {}
+  );
   const [pageByRoom, setPageByRoom] = useState<Record<number, number>>({});
   const [hasMoreByRoom, setHasMoreByRoom] = useState<Record<number, boolean>>(
     {}
@@ -247,9 +217,7 @@ export default function Chat() {
   const [callOpen, setCallOpen] = useState(false);
   const [callRoomId, setCallRoomId] = useState<number | null>(null);
   const [callOtherUser, setCallOtherUser] = useState<User | null>(null);
-  const [incomingOffer, setIncomingOffer] = useState<IncomingOffer | null>(
-    null
-  );
+  const [incomingOffer, setIncomingOffer] = useState<IncomingOffer | null>(null);
   const [callKey, setCallKey] = useState(0);
   const [callRole, setCallRole] = useState<"caller" | "callee">("caller");
 
@@ -669,30 +637,21 @@ export default function Chat() {
   const unreadTotal = getUnreadTotal();
 
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      <aside style={{ width: 320, padding: 12, borderRight: "1px solid #ddd" }}>
-        <div style={{ marginBottom: 10 }}>
-          {/* ✅ FIX TS1003: qui il tag div è chiuso correttamente con ">" */}
-          <div
-            style={{
-              fontWeight: 700,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span>Utenti</span>
+    <div className={styles.layout}>
+      <aside className={styles.sidebar}>
+        <div className={styles.sidebarHeader}>
+          <div className={styles.sidebarTitleRow}>
+            <span>Lista Utenti</span>
             {unreadTotal > 0 && (
-              <span style={badgeStyle("#111827")}>{unreadTotal}</span>
+              <span className={`${styles.badge} ${styles.badgeTotal}`}>
+                {unreadTotal}
+              </span>
             )}
           </div>
 
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
-            Loggato come: {user?.email}
-          </div>
+          <div className={styles.loggedAs}>Loggato come: {user?.email}</div>
 
-          {/* ✅ FIX: Admin al posto di Profilo + Logout */}
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <div className={styles.sidebarActions}>
             {user?.role === "ADMIN" ? (
               <button type="button" onClick={() => navigate("/admin")}>
                 Admin
@@ -710,9 +669,9 @@ export default function Chat() {
         </div>
 
         {usersLoading && <div>Caricamento...</div>}
-        {usersError && <div style={{ color: "crimson" }}>{usersError}</div>}
+        {usersError && <div className={styles.sidebarError}>{usersError}</div>}
 
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        <ul className={styles.usersList}>
           {users
             .filter((u) => u.id !== user?.id)
             .map((u) => {
@@ -721,43 +680,32 @@ export default function Chat() {
               const unread = getUnreadForUser(u.id);
 
               return (
-                <li key={u.id} style={{ marginBottom: 6 }}>
+                <li key={u.id} className={styles.userItem}>
                   <button
+                    type="button"
                     onClick={() => void openChatWith(u)}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "8px 10px",
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                      background: active ? "#f3f3f3" : "white",
-                      cursor: "pointer",
-                    }}
+                    className={`${styles.userButton} ${
+                      active ? styles.userButtonActive : ""
+                    }`}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <span style={presenceDotStyle(status)} />
-                        <div>{u.email}</div>
+                    <div className={styles.userTopRow}>
+                      <div className={styles.userIdentity}>
+                        <span
+                          className={`${styles.presenceDot} ${presenceClass(
+                            status
+                          )}`}
+                        />
+                        <div className={styles.userEmail}>{u.email}</div>
                       </div>
 
                       {unread > 0 && (
-                        <span style={badgeStyle()}>{unread}</span>
+                        <span className={`${styles.badge} ${styles.badgeUnread}`}>
+                          {unread}
+                        </span>
                       )}
                     </div>
 
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>{u.role}</div>
+                    <div className={styles.userRole}>{u.role}</div>
                   </button>
                 </li>
               );
@@ -765,60 +713,61 @@ export default function Chat() {
         </ul>
       </aside>
 
-      <main style={{ flex: 1, padding: 12, overflow: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <h2 style={{ margin: 0 }}>
+      <main className={styles.main}>
+        <div className={styles.topBar}>
+          <h2 className={styles.title}>
             {selectedUser
               ? `Chat con ${selectedUser.email}`
               : "Seleziona un utente"}
           </h2>
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={startVideoCall} disabled={!room || !selectedUser}>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              onClick={startVideoCall}
+              disabled={!room || !selectedUser}
+            >
               Video
             </button>
           </div>
         </div>
 
-        {error && <div style={{ color: "crimson", marginTop: 6 }}>{error}</div>}
+        {error && <div className={styles.error}>{error}</div>}
 
-        <div style={{ marginTop: 12 }}>
+        <div className={styles.scroller}>
           {hasMore && (
-            <button onClick={loadMore} style={{ marginBottom: 8 }}>
+            <button type="button" onClick={loadMore} className={styles.loadMore}>
               Carica altri
             </button>
           )}
 
-          {loadingMsgs && <div>Caricamento messaggi...</div>}
+          {loadingMsgs && (
+            <div className={styles.loading}>Caricamento messaggi...</div>
+          )}
 
           {grouped.map((g) => (
-            <div key={g.day} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>{g.day}</div>
+            <div key={g.day} className={styles.dayGroup}>
+              <div className={styles.dayLabel}>{g.day}</div>
 
-              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <div className={styles.msgGrid}>
                 {g.items.map((m) => {
                   const mine = m.userId === user?.id;
                   return (
                     <div
                       key={m.id}
-                      style={{
-                        display: "flex",
-                        justifyContent: mine ? "flex-end" : "flex-start",
-                      }}
+                      className={`${styles.msgRow} ${
+                        mine ? styles.msgRowMine : styles.msgRowOther
+                      }`}
                     >
                       <div
-                        style={{
-                          maxWidth: "70%",
-                          border: "1px solid #ddd",
-                          borderRadius: 10,
-                          padding: "8px 10px",
-                          background: mine ? "#eff6ff" : "white",
-                        }}
+                        className={`${styles.bubble} ${
+                          mine ? styles.bubbleMine : ""
+                        }`}
                       >
-                        <div style={{ fontSize: 12, opacity: 0.7 }}>
+                        <div className={styles.msgMeta}>
                           {formatTime(m.createdAt)}
                         </div>
-                        <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
+                        <div className={styles.msgBody}>{m.content}</div>
                       </div>
                     </div>
                   );
@@ -829,53 +778,49 @@ export default function Chat() {
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <div className={styles.composer}>
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={room ? "Scrivi un messaggio..." : "Seleziona un utente..."}
-            style={{ flex: 1 }}
+            placeholder={
+              room ? "Scrivi un messaggio..." : "Seleziona un utente..."
+            }
+            className={styles.composerInput}
             disabled={!room || sending}
             onKeyDown={(e) => {
               if (e.key === "Enter") void send();
             }}
           />
-          <button onClick={() => void send()} disabled={sending || !room}>
+          <button
+            type="button"
+            onClick={() => void send()}
+            disabled={sending || !room}
+          >
             {sending ? "Invio..." : "Invia"}
           </button>
         </div>
       </main>
 
       {toast && (
-        <div
-          style={{
-            position: "fixed",
-            right: 18,
-            bottom: 18,
-            border: "1px solid #ddd",
-            background: "white",
-            borderRadius: 10,
-            padding: 12,
-            width: 320,
-            boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
-          }}
-        >
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Nuovo messaggio</div>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
+        <div className={styles.toast}>
+          <div className={styles.toastTitle}>Nuovo messaggio</div>
+          <div className={styles.toastMeta}>
             Da utente #{toast.otherUserId} — room #{toast.roomId}
           </div>
-          <div style={{ marginTop: 8 }}>{toast.preview}</div>
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <div className={styles.toastPreview}>{toast.preview}</div>
+          <div className={styles.toastActions}>
             <button
-              onClick={() =>
-                void openChatWith(
-                  users.find((u) => u.id === toast.otherUserId) ?? users[0]!
-                )
-              }
+              type="button"
+              onClick={() => {
+                const target = users.find((u) => u.id === toast.otherUserId);
+                if (target) void openChatWith(target);
+              }}
             >
               Apri
             </button>
-            <button onClick={() => setToast(null)}>Chiudi</button>
+            <button type="button" onClick={() => setToast(null)}>
+              Chiudi
+            </button>
           </div>
         </div>
       )}

@@ -1,4 +1,23 @@
-# Progetto Finale — Corso Full Stack Web Developer
+# FSWD-FP — Chat 1-to-1 (Full-Stack)
+
+Progetto finale full-stack:
+- Backend: Node + Express + Prisma + MySQL + JWT
+- Frontend: React + Vite + TypeScript
+- Realtime: Socket.IO (messaggi + presence)
+- WebRTC: Video call 1-to-1 (solo video)
+
+## Requisiti
+- Node 20+
+- MySQL in locale (o container) con database `fswd_fp`
+
+## Setup rapido
+
+### 1) Backend
+```bash
+cd backend
+npm i
+cp env.example .env
+npm run dev# Progetto Finale — Corso Full Stack Web Developer
 
 Applicazione Web di Messaggistica Istantanea  
 Sviluppata come progetto finale del corso Full Stack Web Developer.
