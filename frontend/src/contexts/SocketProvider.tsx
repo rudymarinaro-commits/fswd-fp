@@ -8,7 +8,9 @@ import { socket, setSocketToken } from "../services/socket";
  * - connette quando esiste token
  * - disconnette su logout/token nullo
  * - gestisce presence:sync + presence:state
- * - invia ping attività (heartbeat + input)
+ * - invia ping SOLO su attività reale (mouse/tastiera) + connect/visibility
+ *
+ * NOTA: niente heartbeat automatico, altrimenti l'IDLE (pallino giallo) non scatta mai.
  */
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -21,7 +23,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   >({});
 
   const lastActivityPingAtRef = useRef<number>(0);
-  const heartbeatRef = useRef<number | null>(null);
 
   function sendPing(force = false) {
     const now = Date.now();
@@ -35,7 +36,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!token) {
       // logout / token nullo: disconnetto e rimuovo listener
-      // NB: niente setState qui (lint react-hooks/set-state-in-effect)
       try {
         socket.off();
         socket.disconnect();
@@ -51,6 +51,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setConnected(true);
       // evita “stale presence” se cambi utente e prima del sync
       setPresenceByUserId({});
+      // ping immediato: mi segno come attivo appena connesso
       sendPing(true);
     };
 
@@ -109,28 +110,22 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     const onMouseMove = () => sendPing(false);
     const onKeyDown = () => sendPing(false);
     const onVisibility = () => {
+      // quando torni visibile, ping “forte” (attivo subito)
       if (document.visibilityState === "visible") sendPing(true);
     };
-
-    heartbeatRef.current = window.setInterval(() => {
-      if (socket.connected) sendPing(false);
-    }, 25_000);
 
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("keydown", onKeyDown);
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
-      if (heartbeatRef.current) window.clearInterval(heartbeatRef.current);
-      heartbeatRef.current = null;
-
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [token]);
 
-  // “Safe values” quando non c’è token (evita stati UI incoerenti senza setState in effect)
+  // “Safe values” quando non c’è token
   const value = useMemo(
     () => ({
       socket,
