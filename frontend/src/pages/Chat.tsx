@@ -681,7 +681,7 @@ export default function Chat() {
               gap: 8,
             }}
           >
-            <span>Utenti</span>
+            <span>Lista Utenti</span>
             {unreadTotal > 0 && (
               <span style={badgeStyle("#111827")}>{unreadTotal}</span>
             )}
@@ -752,9 +752,7 @@ export default function Chat() {
                         <div>{u.email}</div>
                       </div>
 
-                      {unread > 0 && (
-                        <span style={badgeStyle()}>{unread}</span>
-                      )}
+                      {unread > 0 && <span style={badgeStyle()}>{unread}</span>}
                     </div>
 
                     <div style={{ fontSize: 12, opacity: 0.7 }}>{u.role}</div>
@@ -818,7 +816,9 @@ export default function Chat() {
                         <div style={{ fontSize: 12, opacity: 0.7 }}>
                           {formatTime(m.createdAt)}
                         </div>
-                        <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
+                        <div style={{ whiteSpace: "pre-wrap" }}>
+                          {m.content}
+                        </div>
                       </div>
                     </div>
                   );
@@ -833,7 +833,9 @@ export default function Chat() {
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={room ? "Scrivi un messaggio..." : "Seleziona un utente..."}
+            placeholder={
+              room ? "Scrivi un messaggio..." : "Seleziona un utente..."
+            }
             style={{ flex: 1 }}
             disabled={!room || sending}
             onKeyDown={(e) => {
@@ -860,7 +862,9 @@ export default function Chat() {
             boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Nuovo messaggio</div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            Nuovo messaggio
+          </div>
           <div style={{ fontSize: 12, opacity: 0.7 }}>
             Da utente #{toast.otherUserId} — room #{toast.roomId}
           </div>
