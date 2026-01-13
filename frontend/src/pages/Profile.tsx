@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch } from "../services/api";
 import type { User } from "../types/api";
+import styles from "./Profile.module.css";
 
 type UpdateMePayload = {
   firstName?: string;
@@ -89,117 +90,135 @@ export default function Profile() {
     refreshMe,
   ]);
 
-  if (!user) return <div style={{ padding: 16 }}>Non autenticato</div>;
+  if (!user) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.unauth}>
+          <p className={styles.unauthText}>Non autenticato</p>
+        </div>
+      </div>
+    );
+  }
+
+  const isOk = msg?.startsWith("✅") ?? false;
 
   return (
-    <div style={{ padding: 16, maxWidth: 720 }}>
-      {/* TOP ACTIONS */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <button type="button" onClick={() => navigate("/chat")}>
-          Vai alla chat
-        </button>
-        <button type="button" onClick={logout}>
-          Logout
-        </button>
-      </div>
-
-      <h2 style={{ marginTop: 0 }}>Profilo</h2>
-
-      <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 12 }}>
-        Loggato come: <b>{user.email}</b> — ruolo: <b>{user.role}</b>
-      </div>
-
-      <div style={{ display: "grid", gap: 10 }}>
-        <label>
-          Nome
-          <input
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <label>
-          Cognome
-          <input
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <label>
-          Username
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <label>
-          Telefono
-          <input
-            value={phone ?? ""}
-            onChange={(e) => setPhone(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <label>
-          Indirizzo
-          <input
-            value={address ?? ""}
-            onChange={(e) => setAddress(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <label>
-          Avatar URL
-          <input
-            value={avatarUrl ?? ""}
-            onChange={(e) => setAvatarUrl(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <hr />
-
-        <div style={{ fontWeight: 700 }}>Cambio password (opzionale)</div>
-
-        <label>
-          Password attuale
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <label>
-          Nuova password
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button type="button" onClick={onSave} disabled={saving}>
-            {saving ? "Salvataggio..." : "Salva"}
-          </button>
-          {msg && (
-            <div style={{ color: msg.startsWith("✅") ? "green" : "crimson" }}>
-              {msg}
+    <div className={styles.page}>
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <div className={styles.titleWrap}>
+            <h1 className={styles.title}>Profilo</h1>
+            <div className={styles.meta}>
+              Loggato come: <b>{user.email}</b> — ruolo: <b>{user.role}</b>
             </div>
-          )}
+          </div>
+
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              onClick={() => navigate("/chat")}
+            >
+              Vai alla chat
+            </button>
+
+            <button type="button" className={styles.btnDanger} onClick={logout}>
+              Logout
+            </button>
+          </div>
+        </div>
+
+        <div className={styles.card}>
+          <div className={styles.form}>
+            <div className={styles.grid}>
+              <label className={styles.label}>
+                Nome
+                <input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+              </label>
+
+              <label className={styles.label}>
+                Cognome
+                <input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                />
+              </label>
+
+              <label className={styles.label}>
+                Username
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </label>
+
+              <label className={styles.label}>
+                Telefono
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </label>
+
+              <label className={`${styles.label} ${styles.full}`}>
+                Indirizzo
+                <input
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                />
+              </label>
+
+              <label className={`${styles.label} ${styles.full}`}>
+                Avatar URL
+                <input
+                  value={avatarUrl}
+                  onChange={(e) => setAvatarUrl(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <hr className={styles.divider} />
+
+            <div className={styles.sectionTitle}>Cambio password (opzionale)</div>
+
+            <div className={styles.grid}>
+              <label className={styles.label}>
+                Password attuale
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+              </label>
+
+              <label className={styles.label}>
+                Nuova password
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className={styles.footer}>
+              <button type="button" onClick={onSave} disabled={saving}>
+                {saving ? "Salvataggio..." : "Salva"}
+              </button>
+
+              {msg && (
+                <div
+                  className={`${styles.message} ${
+                    isOk ? styles.messageOk : styles.messageErr
+                  }`}
+                >
+                  {msg}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

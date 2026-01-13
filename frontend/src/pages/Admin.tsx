@@ -1,44 +1,72 @@
-// frontend/src/pages/Admin.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import type { User } from "../types/api";
 import { apiFetch } from "../services/api";
+import type { Role, User } from "../types/api";
+import styles from "./Admin.module.css";
 
-type Role = "ADMIN" | "USER";
+type CreateUserPayload = {
+  email: string;
+  password: string;
+  role: Role;
 
-function normalizeStr(v: string) {
+  firstName: string;
+  lastName: string;
+  username: string;
+
+  phone?: string;
+  address?: string;
+  avatarUrl?: string;
+};
+
+function normalize(v: string): string {
   return v.trim();
+}
+
+function isRole(v: string): v is Role {
+  return v === "ADMIN" || v === "USER";
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return "Errore inatteso";
 }
 
 export default function Admin() {
   const { token, user, logout } = useAuth();
   const navigate = useNavigate();
 
+  const canSee = user?.role === "ADMIN";
+
+  // ====== USERS LIST ======
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // ====== CREATE USER (ALL FIELDS PER TRACCIA) ======
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("USER");
+  const [search, setSearch] = useState("");
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [username, setUsername] = useState("");
+  // ====== CREATE USER ======
+  const [cEmail, setCEmail] = useState("");
+  const [cPassword, setCPassword] = useState("");
+  const [cRole, setCRole] = useState<Role>("USER");
 
-  // opzionali
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
+  const [cFirstName, setCFirstName] = useState("");
+  const [cLastName, setCLastName] = useState("");
+  const [cUsername, setCUsername] = useState("");
+
+  const [cPhone, setCPhone] = useState("");
+  const [cAddress, setCAddress] = useState("");
+  const [cAvatarUrl, setCAvatarUrl] = useState("");
 
   const [creating, setCreating] = useState(false);
-  const [createErr, setCreateErr] = useState<string | null>(null);
-  const [createOk, setCreateOk] = useState<string | null>(null);
+  const [createMsg, setCreateMsg] = useState<string | null>(null);
 
-  async function loadUsers() {
+  const loadUsers = useCallback(async () => {
     if (!token) return;
+
     setLoading(true);
     setErr(null);
 
@@ -46,57 +74,54 @@ export default function Admin() {
       const data = await apiFetch<User[]>("/admin/users", {}, token);
       setUsers(data);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Errore caricamento utenti";
-      setErr(msg);
+      setErr(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    void loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const usersSorted = useMemo(() => {
-    return [...users].sort((a, b) => {
-      const ra = a.role === "ADMIN" ? 0 : 1;
-      const rb = b.role === "ADMIN" ? 0 : 1;
-      if (ra !== rb) return ra - rb;
-      return a.email.localeCompare(b.email);
-    });
-  }, [users]);
-
-  async function createUser() {
+  useEffect(() => {
     if (!token) return;
+    void loadUsers();
+  }, [token, loadUsers]);
 
-    setCreateErr(null);
-    setCreateOk(null);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return users;
 
-    const payload = {
-      email: normalizeStr(email),
-      password,
-      role,
-      firstName: normalizeStr(firstName),
-      lastName: normalizeStr(lastName),
-      username: normalizeStr(username),
-      // opzionali (stringhe, backend le accetta così)
-      phone: normalizeStr(phone),
-      address: normalizeStr(address),
-      avatarUrl: normalizeStr(avatarUrl),
+    return users.filter((u) => {
+      const hay = `${u.email} ${u.username ?? ""} ${u.firstName ?? ""} ${u.lastName ?? ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [users, search]);
+
+  const createUser = useCallback(async () => {
+    if (!token) return;
+    if (creating) return;
+
+    setCreateMsg(null);
+
+    const payload: CreateUserPayload = {
+      email: normalize(cEmail).toLowerCase(),
+      password: cPassword,
+      role: cRole,
+
+      firstName: normalize(cFirstName),
+      lastName: normalize(cLastName),
+      username: normalize(cUsername),
+
+      phone: normalize(cPhone),
+      address: normalize(cAddress),
+      avatarUrl: normalize(cAvatarUrl),
     };
 
-    // min validation FE (senza rischi backend)
-    if (
-      !payload.email ||
-      !payload.password ||
-      !payload.firstName ||
-      !payload.lastName ||
-      !payload.username
-    ) {
-      setCreateErr(
-        "Compila Email, Password, Nome, Cognome e Username (Telefono/Indirizzo/Immagine sono facoltativi)."
-      );
+    if (!payload.email || !payload.password || !payload.firstName || !payload.lastName || !payload.username) {
+      setCreateMsg("❌ Compila: Email, Password, Nome, Cognome e Username. (Telefono/Indirizzo/Avatar sono facoltativi)");
+      return;
+    }
+
+    if (payload.password.length < 6) {
+      setCreateMsg("❌ Password deve essere almeno 6 caratteri");
       return;
     }
 
@@ -106,281 +131,344 @@ export default function Admin() {
         "/admin/users",
         {
           method: "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            ...payload,
+            phone: payload.phone ? payload.phone : "",
+            address: payload.address ? payload.address : "",
+            avatarUrl: payload.avatarUrl ? payload.avatarUrl : "",
+          }),
         },
         token
       );
 
-      setCreateOk("Utente creato correttamente ✅");
+      setCreateMsg("✅ Utente creato correttamente");
 
-      // reset form
-      setEmail("");
-      setPassword("");
-      setRole("USER");
-      setFirstName("");
-      setLastName("");
-      setUsername("");
-      setPhone("");
-      setAddress("");
-      setAvatarUrl("");
+      setCEmail("");
+      setCPassword("");
+      setCRole("USER");
+      setCFirstName("");
+      setCLastName("");
+      setCUsername("");
+      setCPhone("");
+      setCAddress("");
+      setCAvatarUrl("");
 
       await loadUsers();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Errore creazione utente";
-      setCreateErr(msg);
+      setCreateMsg(`❌ ${getErrorMessage(e)}`);
     } finally {
       setCreating(false);
     }
+  }, [
+    token,
+    creating,
+    cEmail,
+    cPassword,
+    cRole,
+    cFirstName,
+    cLastName,
+    cUsername,
+    cPhone,
+    cAddress,
+    cAvatarUrl,
+    loadUsers,
+  ]);
+
+  const updateRole = useCallback(
+    async (target: User, nextRole: Role) => {
+      if (!token) return;
+      if (!canSee) return;
+      if (savingId || deletingId) return;
+
+      setMsg(null);
+      setErr(null);
+      setSavingId(target.id);
+
+      try {
+        const updated = await apiFetch<User>(
+          `/admin/users/${target.id}`,
+          { method: "PATCH", body: JSON.stringify({ role: nextRole }) },
+          token
+        );
+
+        setUsers((prev) => prev.map((u) => (u.id === target.id ? updated : u)));
+        setMsg("✅ Ruolo aggiornato");
+      } catch (e) {
+        setErr(getErrorMessage(e));
+      } finally {
+        setSavingId(null);
+      }
+    },
+    [token, canSee, savingId, deletingId]
+  );
+
+  const deleteUser = useCallback(
+    async (target: User) => {
+      if (!token) return;
+      if (!canSee) return;
+      if (savingId || deletingId) return;
+
+      if (target.id === user?.id) {
+        setErr("Non puoi eliminare il tuo utente.");
+        return;
+      }
+
+      const ok = window.confirm(`Eliminare l'utente "${target.email}"? Questa azione è irreversibile.`);
+      if (!ok) return;
+
+      setMsg(null);
+      setErr(null);
+      setDeletingId(target.id);
+
+      try {
+        // ✅ route corretta backend: DELETE /api/admin/users/:id
+        await apiFetch<unknown>(`/admin/users/${target.id}`, { method: "DELETE" }, token);
+
+        setUsers((prev) => prev.filter((u) => u.id !== target.id));
+        setMsg("✅ Utente eliminato");
+      } catch (e) {
+        setErr(getErrorMessage(e));
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [token, canSee, savingId, deletingId, user?.id]
+  );
+
+  if (!user || !canSee) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.unauth}>
+          <p className={styles.unauthText}>Accesso non autorizzato. Questa pagina è solo per Admin.</p>
+        </div>
+      </div>
+    );
   }
 
+  const isCreateOk = createMsg?.startsWith("✅") ?? false;
+  const isOk = msg?.startsWith("✅") ?? false;
+
   return (
-    <div style={{ padding: 16, maxWidth: 980, margin: "0 auto" }}>
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h2 style={{ margin: 0 }}>Lista utenti</h2>
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
-            Loggato come: {user?.email} ({user?.role})
+    <div className={styles.page}>
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <div className={styles.titleWrap}>
+            <h1 className={styles.title}>Admin</h1>
+            <div className={styles.meta}>
+              Loggato come: <b>{user.email}</b> — ruolo: <b>{user.role}</b>
+            </div>
+          </div>
+
+          <div className={styles.actions}>
+            <button type="button" className={styles.btnPrimary} onClick={() => navigate("/chat")}>
+              Vai alla chat
+            </button>
+
+            <button type="button" className={styles.btnDanger} onClick={logout}>
+              Logout
+            </button>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button type="button" onClick={() => navigate("/chat")}>
-            Vai alla chat
-          </button>
-          <button type="button" onClick={logout}>
-            Logout
-          </button>
-        </div>
-      </div>
+        <div className={styles.card}>
+          {/* ===== CREATE USER ===== */}
+          <h2 className={styles.sectionTitle}>Crea utente</h2>
 
-      <hr style={{ margin: "16px 0" }} />
+          {createMsg && <div className={isCreateOk ? styles.msgOk : styles.msgErr}>{createMsg}</div>}
 
-      <section
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 10,
-          padding: 12,
-          marginBottom: 16,
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Crea utente</h3>
+          <div className={styles.formGrid} style={{ marginTop: 10 }}>
+            <label className={styles.label}>
+              Email (univoca)
+              <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="user2@example.com" />
+            </label>
 
-        {createErr && (
-          <div style={{ color: "crimson", marginBottom: 8 }}>{createErr}</div>
-        )}
-        {createOk && (
-          <div style={{ color: "green", marginBottom: 8 }}>{createOk}</div>
-        )}
+            <label className={styles.label}>
+              Password
+              <input
+                value={cPassword}
+                onChange={(e) => setCPassword(e.target.value)}
+                placeholder="User123!"
+                type="password"
+              />
+            </label>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: 10,
-          }}
-        >
-          <label style={{ display: "grid", gap: 4 }}>
-            <span>Email (univoca)</span>
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="user2@example.com"
-            />
-          </label>
+            <label className={styles.label}>
+              Ruolo
+              <select
+                value={cRole}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (isRole(v)) setCRole(v);
+                }}
+              >
+                <option value="USER">USER</option>
+                <option value="ADMIN">ADMIN</option>
+              </select>
+            </label>
 
-          <label style={{ display: "grid", gap: 4 }}>
-            <span>Password</span>
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="User123!"
-              type="password"
-            />
-          </label>
+            <label className={styles.label}>
+              Nome
+              <input value={cFirstName} onChange={(e) => setCFirstName(e.target.value)} placeholder="Mario" />
+            </label>
 
-          <label style={{ display: "grid", gap: 4 }}>
-            <span>Ruolo</span>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
+            <label className={styles.label}>
+              Cognome
+              <input value={cLastName} onChange={(e) => setCLastName(e.target.value)} placeholder="Rossi" />
+            </label>
+
+            <label className={styles.label}>
+              Username (non univoco)
+              <input value={cUsername} onChange={(e) => setCUsername(e.target.value)} placeholder="mario" />
+            </label>
+
+            <label className={styles.label}>
+              Telefono (facoltativo)
+              <input value={cPhone} onChange={(e) => setCPhone(e.target.value)} placeholder="+39 333 0000000" />
+            </label>
+
+            <label className={styles.label}>
+              Indirizzo (facoltativo)
+              <input value={cAddress} onChange={(e) => setCAddress(e.target.value)} placeholder="Via Roma 1, Milano" />
+            </label>
+
+            <label className={`${styles.label} ${styles.full}`}>
+              Immagine profilo (URL facoltativo)
+              <input value={cAvatarUrl} onChange={(e) => setCAvatarUrl(e.target.value)} placeholder="https://..." />
+            </label>
+          </div>
+
+          <div className={styles.formActions}>
+            <button type="button" className={styles.btnPrimary} onClick={() => void createUser()} disabled={creating}>
+              {creating ? "Creazione..." : "Crea utente"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCreateMsg(null);
+                setCEmail("");
+                setCPassword("");
+                setCRole("USER");
+                setCFirstName("");
+                setCLastName("");
+                setCUsername("");
+                setCPhone("");
+                setCAddress("");
+                setCAvatarUrl("");
+              }}
+              disabled={creating}
             >
-              <option value="USER">USER</option>
-              <option value="ADMIN">ADMIN</option>
-            </select>
-          </label>
+              Pulisci
+            </button>
 
-          <label style={{ display: "grid", gap: 4 }}>
-            <span>Nome</span>
+            <span className={styles.small}>Required: email, password, firstName, lastName, username</span>
+          </div>
+
+          <hr className={styles.divider} />
+
+          {/* ===== USERS TABLE ===== */}
+          <h2 className={styles.sectionTitle}>Gestione utenti</h2>
+
+          <div className={styles.row}>
             <input
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder="Mario"
+              className={styles.inputGrow}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cerca per email / username / nome..."
             />
-          </label>
+            <button type="button" onClick={() => void loadUsers()} disabled={loading}>
+              {loading ? "Aggiorno..." : "Ricarica"}
+            </button>
+          </div>
 
-          <label style={{ display: "grid", gap: 4 }}>
-            <span>Cognome</span>
-            <input
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              placeholder="Rossi"
-            />
-          </label>
-
-          <label style={{ display: "grid", gap: 4 }}>
-            <span>Username (non univoco)</span>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="mario"
-            />
-          </label>
-
-          <label style={{ display: "grid", gap: 4 }}>
-            <span>Telefono (facoltativo)</span>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+39 333 0000000"
-            />
-          </label>
-
-          <label style={{ display: "grid", gap: 4 }}>
-            <span>Indirizzo (facoltativo)</span>
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Via Roma 1, Milano"
-            />
-          </label>
-
-          <label style={{ display: "grid", gap: 4 }}>
-            <span>Immagine profilo (URL facoltativo)</span>
-            <input
-              value={avatarUrl}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              placeholder="https://..."
-            />
-          </label>
-        </div>
-
-        <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            onClick={() => void createUser()}
-            disabled={creating}
-          >
-            {creating ? "Creazione..." : "Crea utente"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setCreateErr(null);
-              setCreateOk(null);
-            }}
-          >
-            Pulisci messaggi
-          </button>
-        </div>
-      </section>
-
-      <section
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 10,
-          padding: 12,
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Lista utenti</h3>
-
-        {loading && <div>Caricamento...</div>}
-        {err && <div style={{ color: "crimson" }}>{err}</div>}
-
-        {!loading && !err && (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
               <thead>
                 <tr>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      borderBottom: "1px solid #ddd",
-                      padding: 8,
-                    }}
-                  >
-                    Email
-                  </th>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      borderBottom: "1px solid #ddd",
-                      padding: 8,
-                    }}
-                  >
-                    Ruolo
-                  </th>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      borderBottom: "1px solid #ddd",
-                      padding: 8,
-                    }}
-                  >
-                    Nome
-                  </th>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      borderBottom: "1px solid #ddd",
-                      padding: 8,
-                    }}
-                  >
-                    Cognome
-                  </th>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      borderBottom: "1px solid #ddd",
-                      padding: 8,
-                    }}
-                  >
-                    Username
-                  </th>
+                  <th className={styles.th}>Email</th>
+                  <th className={styles.th}>Username</th>
+                  <th className={styles.th}>Nome</th>
+                  <th className={styles.th}>Ruolo</th>
+                  <th className={styles.th}>Azioni</th>
                 </tr>
               </thead>
+
               <tbody>
-                {usersSorted.map((u) => (
-                  <tr key={u.id}>
-                    <td style={{ borderBottom: "1px solid #eee", padding: 8 }}>
-                      {u.email}
-                    </td>
-                    <td style={{ borderBottom: "1px solid #eee", padding: 8 }}>
-                      {u.role}
-                    </td>
-                    <td style={{ borderBottom: "1px solid #eee", padding: 8 }}>
-                      {u.firstName}
-                    </td>
-                    <td style={{ borderBottom: "1px solid #eee", padding: 8 }}>
-                      {u.lastName}
-                    </td>
-                    <td style={{ borderBottom: "1px solid #eee", padding: 8 }}>
-                      {u.username}
+                {filtered.map((u) => {
+                  const isMe = u.id === user.id;
+                  const busy = savingId === u.id || deletingId === u.id;
+
+                  return (
+                    <tr key={u.id} className={styles.tr}>
+                      <td className={styles.td}>{u.email}</td>
+                      <td className={styles.td}>{u.username ?? "—"}</td>
+                      <td className={styles.td}>
+                        {(u.firstName || u.lastName)
+                          ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                          : "—"}
+                      </td>
+                      <td className={styles.td}>
+                        <span
+                          className={`${styles.roleBadge} ${
+                            u.role === "ADMIN" ? styles.roleAdmin : styles.roleUser
+                          }`}
+                        >
+                          {u.role}
+                        </span>
+                      </td>
+
+                      <td className={styles.td}>
+                        <div className={styles.actionRow}>
+                          <select
+                            className={styles.roleSelect}
+                            value={u.role}
+                            onChange={(e) => {
+                              const next = e.target.value;
+                              if (!isRole(next)) return;
+                              void updateRole(u, next);
+                            }}
+                            disabled={isMe || busy}
+                          >
+                            <option value="USER">USER</option>
+                            <option value="ADMIN">ADMIN</option>
+                          </select>
+
+                          <button
+                            type="button"
+                            className={styles.dangerMini}
+                            onClick={() => void deleteUser(u)}
+                            disabled={isMe || busy}
+                            title={isMe ? "Non puoi eliminare il tuo utente" : "Elimina utente"}
+                          >
+                            {deletingId === u.id ? "Elimino..." : "Elimina"}
+                          </button>
+
+                          {isMe && <span className={styles.small}>(il tuo utente non è modificabile)</span>}
+                          {savingId === u.id && <span className={styles.small}>Salvataggio...</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {filtered.length === 0 && (
+                  <tr>
+                    <td className={styles.td} colSpan={5}>
+                      <span className={styles.small}>Nessun utente trovato</span>
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+
+          <div className={styles.footer}>
+            {loading && <div className={styles.small}>Caricamento...</div>}
+            {err && <div className={styles.msgErr}>{err}</div>}
+            {msg && <div className={isOk ? styles.msgOk : styles.msgErr}>{msg}</div>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
