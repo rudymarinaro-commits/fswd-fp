@@ -1,7 +1,15 @@
-.layout {
-  display: flex;
+.page {
   height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.layout {
+  flex: 1;
+  min-height: 0;
   width: 100%;
+  display: flex;
 }
 
 .sidebar {
@@ -21,24 +29,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.loggedAs {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-
-.sidebarActions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.sidebarError {
-  color: var(--danger);
-  margin-top: 8px;
 }
 
 .usersList {
@@ -248,35 +238,7 @@
   flex: 1;
 }
 
-.toast {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  border: 1px solid var(--border);
-  background: rgba(17, 26, 46, 0.96);
-  border-radius: 12px;
-  padding: 12px;
-  width: 320px;
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
-}
-
-.toastTitle {
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.toastMeta {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.toastPreview {
+.sidebarError {
+  color: var(--danger);
   margin-top: 8px;
-}
-
-.toastActions {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
 }

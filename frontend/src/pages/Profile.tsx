@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch } from "../services/api";
 import type { User } from "../types/api";
+import Navbar from "../components/Navbar";
 import styles from "./Profile.module.css";
 
 type UpdateMePayload = {
@@ -22,8 +22,7 @@ function getErrorMessage(err: unknown): string {
 }
 
 export default function Profile() {
-  const { token, user, logout, refreshMe } = useAuth();
-  const navigate = useNavigate();
+  const { token, user, refreshMe } = useAuth();
 
   const [firstName, setFirstName] = useState(user?.firstName ?? "");
   const [lastName, setLastName] = useState(user?.lastName ?? "");
@@ -53,7 +52,6 @@ export default function Profile() {
       avatarUrl: avatarUrl.trim() ? avatarUrl.trim() : null,
     };
 
-    // password change (opzionale)
     const cp = currentPassword.trim();
     const np = newPassword.trim();
     if (cp && np) {
@@ -62,12 +60,7 @@ export default function Profile() {
     }
 
     try {
-      await apiFetch<User>(
-        "/users/me",
-        { method: "PATCH", body: JSON.stringify(payload) },
-        token
-      );
-
+      await apiFetch<User>("/users/me", { method: "PATCH", body: JSON.stringify(payload) }, token);
       await refreshMe();
       setCurrentPassword("");
       setNewPassword("");
@@ -93,8 +86,11 @@ export default function Profile() {
   if (!user) {
     return (
       <div className={styles.page}>
-        <div className={styles.unauth}>
-          <p className={styles.unauthText}>Non autenticato</p>
+        <Navbar title="Profilo" active="profile" />
+        <div className={styles.content}>
+          <div className={styles.unauth}>
+            <p className={styles.unauthText}>Non autenticato</p>
+          </div>
         </div>
       </div>
     );
@@ -104,117 +100,72 @@ export default function Profile() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.container}>
-        <div className={styles.header}>
-          <div className={styles.titleWrap}>
-            <h1 className={styles.title}>Profilo</h1>
-            <div className={styles.meta}>
-              Loggato come: <b>{user.email}</b> — ruolo: <b>{user.role}</b>
-            </div>
-          </div>
+      <Navbar title="Profilo" active="profile" />
+      <div className={styles.content}>
+        <div className={styles.container}>
+          <div className={styles.card}>
+            <div className={styles.form}>
+              <div className={styles.grid}>
+                <label className={styles.label}>
+                  Nome
+                  <input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                </label>
 
-          <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.btnPrimary}
-              onClick={() => navigate("/chat")}
-            >
-              Vai alla chat
-            </button>
+                <label className={styles.label}>
+                  Cognome
+                  <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                </label>
 
-            <button type="button" className={styles.btnDanger} onClick={logout}>
-              Logout
-            </button>
-          </div>
-        </div>
+                <label className={styles.label}>
+                  Username
+                  <input value={username} onChange={(e) => setUsername(e.target.value)} />
+                </label>
 
-        <div className={styles.card}>
-          <div className={styles.form}>
-            <div className={styles.grid}>
-              <label className={styles.label}>
-                Nome
-                <input
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                />
-              </label>
+                <label className={styles.label}>
+                  Telefono
+                  <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+                </label>
 
-              <label className={styles.label}>
-                Cognome
-                <input
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                />
-              </label>
+                <label className={`${styles.label} ${styles.full}`}>
+                  Indirizzo
+                  <input value={address} onChange={(e) => setAddress(e.target.value)} />
+                </label>
 
-              <label className={styles.label}>
-                Username
-                <input
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                />
-              </label>
+                <label className={`${styles.label} ${styles.full}`}>
+                  Avatar URL
+                  <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} />
+                </label>
+              </div>
 
-              <label className={styles.label}>
-                Telefono
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </label>
+              <hr className={styles.divider} />
 
-              <label className={`${styles.label} ${styles.full}`}>
-                Indirizzo
-                <input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                />
-              </label>
+              <div className={styles.sectionTitle}>Cambio password (opzionale)</div>
 
-              <label className={`${styles.label} ${styles.full}`}>
-                Avatar URL
-                <input
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                />
-              </label>
-            </div>
+              <div className={styles.grid}>
+                <label className={styles.label}>
+                  Password attuale
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
+                </label>
 
-            <hr className={styles.divider} />
+                <label className={styles.label}>
+                  Nuova password
+                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                </label>
+              </div>
 
-            <div className={styles.sectionTitle}>Cambio password (opzionale)</div>
+              <div className={styles.footer}>
+                <button type="button" onClick={onSave} disabled={saving}>
+                  {saving ? "Salvataggio..." : "Salva"}
+                </button>
 
-            <div className={styles.grid}>
-              <label className={styles.label}>
-                Password attuale
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                />
-              </label>
-
-              <label className={styles.label}>
-                Nuova password
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-              </label>
-            </div>
-
-            <div className={styles.footer}>
-              <button type="button" onClick={onSave} disabled={saving}>
-                {saving ? "Salvataggio..." : "Salva"}
-              </button>
-
-              {msg && (
-                <div
-                  className={`${styles.message} ${
-                    isOk ? styles.messageOk : styles.messageErr
-                  }`}
-                >
-                  {msg}
-                </div>
-              )}
+                {msg && (
+                  <div className={`${styles.message} ${isOk ? styles.messageOk : styles.messageErr}`}>{msg}</div>
+                )}
+              </div>
             </div>
           </div>
         </div>
