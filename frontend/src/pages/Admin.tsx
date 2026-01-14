@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiFetch } from "../services/api";
 import type { Role, User } from "../types/api";
+import Navbar from "../components/Navbar";
 import styles from "./Admin.module.css";
 
 type CreateUserPayload = {
@@ -33,12 +33,9 @@ function getErrorMessage(err: unknown): string {
 }
 
 export default function Admin() {
-  const { token, user, logout } = useAuth();
-  const navigate = useNavigate();
-
+  const { token, user } = useAuth();
   const canSee = user?.role === "ADMIN";
 
-  // ====== USERS LIST ======
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -48,7 +45,7 @@ export default function Admin() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // ====== CREATE USER ======
+  // create user
   const [cEmail, setCEmail] = useState("");
   const [cPassword, setCPassword] = useState("");
   const [cRole, setCRole] = useState<Role>("USER");
@@ -88,7 +85,6 @@ export default function Admin() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return users;
-
     return users.filter((u) => {
       const hay = `${u.email} ${u.username ?? ""} ${u.firstName ?? ""} ${u.lastName ?? ""}`.toLowerCase();
       return hay.includes(q);
@@ -116,7 +112,7 @@ export default function Admin() {
     };
 
     if (!payload.email || !payload.password || !payload.firstName || !payload.lastName || !payload.username) {
-      setCreateMsg("❌ Compila: Email, Password, Nome, Cognome e Username. (Telefono/Indirizzo/Avatar sono facoltativi)");
+      setCreateMsg("❌ Compila: Email, Password, Nome, Cognome e Username.");
       return;
     }
 
@@ -221,9 +217,7 @@ export default function Admin() {
       setDeletingId(target.id);
 
       try {
-        // ✅ route corretta backend: DELETE /api/admin/users/:id
         await apiFetch<unknown>(`/admin/users/${target.id}`, { method: "DELETE" }, token);
-
         setUsers((prev) => prev.filter((u) => u.id !== target.id));
         setMsg("✅ Utente eliminato");
       } catch (e) {
@@ -235,239 +229,219 @@ export default function Admin() {
     [token, canSee, savingId, deletingId, user?.id]
   );
 
-  if (!user || !canSee) {
-    return (
-      <div className={styles.page}>
-        <div className={styles.unauth}>
-          <p className={styles.unauthText}>Accesso non autorizzato. Questa pagina è solo per Admin.</p>
-        </div>
-      </div>
-    );
-  }
-
   const isCreateOk = createMsg?.startsWith("✅") ?? false;
   const isOk = msg?.startsWith("✅") ?? false;
 
   return (
     <div className={styles.page}>
-      <div className={styles.container}>
-        <div className={styles.header}>
-          <div className={styles.titleWrap}>
-            <h1 className={styles.title}>Admin</h1>
-            <div className={styles.meta}>
-              Loggato come: <b>{user.email}</b> — ruolo: <b>{user.role}</b>
+      <Navbar title="Admin" active="admin" />
+
+      <div className={styles.content}>
+        {!user || !canSee ? (
+          <div className={styles.unauth}>
+            <p className={styles.unauthText}>Accesso non autorizzato. Questa pagina è solo per Admin.</p>
+          </div>
+        ) : (
+          <div className={styles.container}>
+            <div className={styles.card}>
+              <h2 className={styles.sectionTitle}>Crea utente</h2>
+
+              {createMsg && <div className={isCreateOk ? styles.msgOk : styles.msgErr}>{createMsg}</div>}
+
+              <div className={styles.formGrid} style={{ marginTop: 10 }}>
+                <label className={styles.label}>
+                  Email (univoca)
+                  <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="user2@example.com" />
+                </label>
+
+                <label className={styles.label}>
+                  Password
+                  <input
+                    value={cPassword}
+                    onChange={(e) => setCPassword(e.target.value)}
+                    placeholder="User123!"
+                    type="password"
+                  />
+                </label>
+
+                <label className={styles.label}>
+                  Ruolo
+                  <select
+                    value={cRole}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (isRole(v)) setCRole(v);
+                    }}
+                  >
+                    <option value="USER">USER</option>
+                    <option value="ADMIN">ADMIN</option>
+                  </select>
+                </label>
+
+                <label className={styles.label}>
+                  Nome
+                  <input value={cFirstName} onChange={(e) => setCFirstName(e.target.value)} placeholder="Mario" />
+                </label>
+
+                <label className={styles.label}>
+                  Cognome
+                  <input value={cLastName} onChange={(e) => setCLastName(e.target.value)} placeholder="Rossi" />
+                </label>
+
+                <label className={styles.label}>
+                  Username (non univoco)
+                  <input value={cUsername} onChange={(e) => setCUsername(e.target.value)} placeholder="mario" />
+                </label>
+
+                <label className={styles.label}>
+                  Telefono (facoltativo)
+                  <input value={cPhone} onChange={(e) => setCPhone(e.target.value)} placeholder="+39 333 0000000" />
+                </label>
+
+                <label className={styles.label}>
+                  Indirizzo (facoltativo)
+                  <input value={cAddress} onChange={(e) => setCAddress(e.target.value)} placeholder="Via Roma 1, Milano" />
+                </label>
+
+                <label className={`${styles.label} ${styles.full}`}>
+                  Immagine profilo (URL facoltativo)
+                  <input value={cAvatarUrl} onChange={(e) => setCAvatarUrl(e.target.value)} placeholder="https://..." />
+                </label>
+              </div>
+
+              <div className={styles.formActions}>
+                <button type="button" onClick={() => void createUser()} disabled={creating}>
+                  {creating ? "Creazione..." : "Crea utente"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateMsg(null);
+                    setCEmail("");
+                    setCPassword("");
+                    setCRole("USER");
+                    setCFirstName("");
+                    setCLastName("");
+                    setCUsername("");
+                    setCPhone("");
+                    setCAddress("");
+                    setCAvatarUrl("");
+                  }}
+                  disabled={creating}
+                >
+                  Pulisci
+                </button>
+
+                <span className={styles.small}>Required: email, password, firstName, lastName, username</span>
+              </div>
+
+              <hr className={styles.divider} />
+
+              <h2 className={styles.sectionTitle}>Gestione utenti</h2>
+
+              <div className={styles.row}>
+                <input
+                  className={styles.inputGrow}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Cerca per email / username / nome..."
+                />
+                <button type="button" onClick={() => void loadUsers()} disabled={loading}>
+                  {loading ? "Aggiorno..." : "Ricarica"}
+                </button>
+              </div>
+
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th className={styles.th}>Email</th>
+                      <th className={styles.th}>Username</th>
+                      <th className={styles.th}>Nome</th>
+                      <th className={styles.th}>Ruolo</th>
+                      <th className={styles.th}>Azioni</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {filtered.map((u) => {
+                      const isMe = u.id === user.id;
+                      const busy = savingId === u.id || deletingId === u.id;
+
+                      return (
+                        <tr key={u.id} className={styles.tr}>
+                          <td className={styles.td}>{u.email}</td>
+                          <td className={styles.td}>{u.username ?? "—"}</td>
+                          <td className={styles.td}>
+                            {(u.firstName || u.lastName)
+                              ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                              : "—"}
+                          </td>
+
+                          <td className={styles.td}>
+                            <span
+                              className={`${styles.roleBadge} ${
+                                u.role === "ADMIN" ? styles.roleAdmin : styles.roleUser
+                              }`}
+                            >
+                              {u.role}
+                            </span>
+                          </td>
+
+                          <td className={styles.td}>
+                            <div className={styles.actionRow}>
+                              <select
+                                className={styles.roleSelect}
+                                value={u.role}
+                                onChange={(e) => {
+                                  const next = e.target.value;
+                                  if (!isRole(next)) return;
+                                  void updateRole(u, next);
+                                }}
+                                disabled={isMe || busy}
+                              >
+                                <option value="USER">USER</option>
+                                <option value="ADMIN">ADMIN</option>
+                              </select>
+
+                              <button
+                                type="button"
+                                className={styles.dangerMini}
+                                onClick={() => void deleteUser(u)}
+                                disabled={isMe || busy}
+                                title={isMe ? "Non puoi eliminare il tuo utente" : "Elimina utente"}
+                              >
+                                {deletingId === u.id ? "Elimino..." : "Elimina"}
+                              </button>
+
+                              {isMe && <span className={styles.small}>(il tuo utente non è modificabile)</span>}
+                              {savingId === u.id && <span className={styles.small}>Salvataggio...</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {filtered.length === 0 && (
+                      <tr>
+                        <td className={styles.td} colSpan={5}>
+                          <span className={styles.small}>Nessun utente trovato</span>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className={styles.footer}>
+                {loading && <div className={styles.small}>Caricamento...</div>}
+                {err && <div className={styles.msgErr}>{err}</div>}
+                {msg && <div className={isOk ? styles.msgOk : styles.msgErr}>{msg}</div>}
+              </div>
             </div>
           </div>
-
-          <div className={styles.actions}>
-            <button type="button" className={styles.btnPrimary} onClick={() => navigate("/chat")}>
-              Vai alla chat
-            </button>
-
-            <button type="button" className={styles.btnDanger} onClick={logout}>
-              Logout
-            </button>
-          </div>
-        </div>
-
-        <div className={styles.card}>
-          {/* ===== CREATE USER ===== */}
-          <h2 className={styles.sectionTitle}>Crea utente</h2>
-
-          {createMsg && <div className={isCreateOk ? styles.msgOk : styles.msgErr}>{createMsg}</div>}
-
-          <div className={styles.formGrid} style={{ marginTop: 10 }}>
-            <label className={styles.label}>
-              Email (univoca)
-              <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="user2@example.com" />
-            </label>
-
-            <label className={styles.label}>
-              Password
-              <input
-                value={cPassword}
-                onChange={(e) => setCPassword(e.target.value)}
-                placeholder="User123!"
-                type="password"
-              />
-            </label>
-
-            <label className={styles.label}>
-              Ruolo
-              <select
-                value={cRole}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (isRole(v)) setCRole(v);
-                }}
-              >
-                <option value="USER">USER</option>
-                <option value="ADMIN">ADMIN</option>
-              </select>
-            </label>
-
-            <label className={styles.label}>
-              Nome
-              <input value={cFirstName} onChange={(e) => setCFirstName(e.target.value)} placeholder="Mario" />
-            </label>
-
-            <label className={styles.label}>
-              Cognome
-              <input value={cLastName} onChange={(e) => setCLastName(e.target.value)} placeholder="Rossi" />
-            </label>
-
-            <label className={styles.label}>
-              Username (non univoco)
-              <input value={cUsername} onChange={(e) => setCUsername(e.target.value)} placeholder="mario" />
-            </label>
-
-            <label className={styles.label}>
-              Telefono (facoltativo)
-              <input value={cPhone} onChange={(e) => setCPhone(e.target.value)} placeholder="+39 333 0000000" />
-            </label>
-
-            <label className={styles.label}>
-              Indirizzo (facoltativo)
-              <input value={cAddress} onChange={(e) => setCAddress(e.target.value)} placeholder="Via Roma 1, Milano" />
-            </label>
-
-            <label className={`${styles.label} ${styles.full}`}>
-              Immagine profilo (URL facoltativo)
-              <input value={cAvatarUrl} onChange={(e) => setCAvatarUrl(e.target.value)} placeholder="https://..." />
-            </label>
-          </div>
-
-          <div className={styles.formActions}>
-            <button type="button" className={styles.btnPrimary} onClick={() => void createUser()} disabled={creating}>
-              {creating ? "Creazione..." : "Crea utente"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setCreateMsg(null);
-                setCEmail("");
-                setCPassword("");
-                setCRole("USER");
-                setCFirstName("");
-                setCLastName("");
-                setCUsername("");
-                setCPhone("");
-                setCAddress("");
-                setCAvatarUrl("");
-              }}
-              disabled={creating}
-            >
-              Pulisci
-            </button>
-
-            <span className={styles.small}>Required: email, password, firstName, lastName, username</span>
-          </div>
-
-          <hr className={styles.divider} />
-
-          {/* ===== USERS TABLE ===== */}
-          <h2 className={styles.sectionTitle}>Gestione utenti</h2>
-
-          <div className={styles.row}>
-            <input
-              className={styles.inputGrow}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cerca per email / username / nome..."
-            />
-            <button type="button" onClick={() => void loadUsers()} disabled={loading}>
-              {loading ? "Aggiorno..." : "Ricarica"}
-            </button>
-          </div>
-
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th className={styles.th}>Email</th>
-                  <th className={styles.th}>Username</th>
-                  <th className={styles.th}>Nome</th>
-                  <th className={styles.th}>Ruolo</th>
-                  <th className={styles.th}>Azioni</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {filtered.map((u) => {
-                  const isMe = u.id === user.id;
-                  const busy = savingId === u.id || deletingId === u.id;
-
-                  return (
-                    <tr key={u.id} className={styles.tr}>
-                      <td className={styles.td}>{u.email}</td>
-                      <td className={styles.td}>{u.username ?? "—"}</td>
-                      <td className={styles.td}>
-                        {(u.firstName || u.lastName)
-                          ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
-                          : "—"}
-                      </td>
-                      <td className={styles.td}>
-                        <span
-                          className={`${styles.roleBadge} ${
-                            u.role === "ADMIN" ? styles.roleAdmin : styles.roleUser
-                          }`}
-                        >
-                          {u.role}
-                        </span>
-                      </td>
-
-                      <td className={styles.td}>
-                        <div className={styles.actionRow}>
-                          <select
-                            className={styles.roleSelect}
-                            value={u.role}
-                            onChange={(e) => {
-                              const next = e.target.value;
-                              if (!isRole(next)) return;
-                              void updateRole(u, next);
-                            }}
-                            disabled={isMe || busy}
-                          >
-                            <option value="USER">USER</option>
-                            <option value="ADMIN">ADMIN</option>
-                          </select>
-
-                          <button
-                            type="button"
-                            className={styles.dangerMini}
-                            onClick={() => void deleteUser(u)}
-                            disabled={isMe || busy}
-                            title={isMe ? "Non puoi eliminare il tuo utente" : "Elimina utente"}
-                          >
-                            {deletingId === u.id ? "Elimino..." : "Elimina"}
-                          </button>
-
-                          {isMe && <span className={styles.small}>(il tuo utente non è modificabile)</span>}
-                          {savingId === u.id && <span className={styles.small}>Salvataggio...</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {filtered.length === 0 && (
-                  <tr>
-                    <td className={styles.td} colSpan={5}>
-                      <span className={styles.small}>Nessun utente trovato</span>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className={styles.footer}>
-            {loading && <div className={styles.small}>Caricamento...</div>}
-            {err && <div className={styles.msgErr}>{err}</div>}
-            {msg && <div className={isOk ? styles.msgOk : styles.msgErr}>{msg}</div>}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,5 @@
-// frontend/src/components/CallModal.tsx
-// Video-call only (fase 5 base). Rimossi tutti i riferimenti alla call voce.
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Socket } from "socket.io-client";
 import type { User } from "../types/api";
 import styles from "./CallModal.module.css";
@@ -18,7 +16,6 @@ type Props = {
   otherUser: User | null;
   socket: Socket;
 
-  // Solo per callee: offer ricevuta (gestita da Chat.tsx)
   incomingOffer?: IncomingOffer | null;
 
   onClose: () => void;
@@ -57,14 +54,10 @@ export default function CallModal({
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  const otherLabel = otherUser
-    ? otherUser.email || `User #${otherUser.id}`
-    : "altro utente";
+  const otherLabel = otherUser ? otherUser.email || `User #${otherUser.id}` : "altro utente";
 
   const rtcConfig = useMemo<RTCConfiguration>(
-    () => ({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    }),
+    () => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }),
     []
   );
 
@@ -120,12 +113,10 @@ export default function CallModal({
       const pc = new RTCPeerConnection(rtcConfig);
       pcRef.current = pc;
 
-      // Local tracks
       for (const track of localStreamRef.current!.getTracks()) {
         pc.addTrack(track, localStreamRef.current!);
       }
 
-      // Remote track
       pc.ontrack = (ev) => {
         const [stream] = ev.streams;
         if (remoteVideoRef.current && stream) {
@@ -133,7 +124,6 @@ export default function CallModal({
         }
       };
 
-      // ICE
       pc.onicecandidate = (ev) => {
         if (ev.candidate) {
           socket.emit("webrtc:ice", { roomId, ice: ev.candidate.toJSON() });
@@ -151,10 +141,7 @@ export default function CallModal({
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      socket.emit("webrtc:offer", {
-        roomId,
-        sdp: offer,
-      });
+      socket.emit("webrtc:offer", { roomId, sdp: offer });
 
       setPhase("CALLING");
     } catch (e) {
@@ -192,6 +179,15 @@ export default function CallModal({
     void startCaller();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ESC chiude
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   // Socket listeners
   useEffect(() => {
@@ -244,10 +240,7 @@ export default function CallModal({
     return () => cleanup();
   }, [cleanup]);
 
-  const title =
-    role === "caller"
-      ? `Video call a ${otherLabel}`
-      : `Video call da ${otherLabel}`;
+  const title = role === "caller" ? `Video call a ${otherLabel}` : `Video call da ${otherLabel}`;
 
   const phaseLabel =
     phase === "CALLING"
@@ -267,8 +260,16 @@ export default function CallModal({
       ? styles.phaseInCall
       : styles.phaseIdle;
 
-  return (
-    <div className={styles.overlay} role="dialog" aria-modal="true">
+  const node = (
+    <div
+      className={styles.overlay}
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        // chiudi cliccando fuori (opzionale ma comodo)
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className={styles.modal}>
         <div className={styles.header}>
           <div className={styles.headerLeft}>
@@ -298,19 +299,11 @@ export default function CallModal({
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={hangup}
-                className={`${styles.btn} ${styles.btnDanger}`}
-              >
+              <button type="button" onClick={hangup} className={`${styles.btn} ${styles.btnDanger}`}>
                 Riaggancia
               </button>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className={`${styles.btn} ${styles.btnGhost}`}
-              >
+              <button type="button" onClick={onClose} className={`${styles.btn} ${styles.btnGhost}`}>
                 Chiudi
               </button>
             </div>
@@ -320,26 +313,17 @@ export default function CallModal({
         <div className={styles.videos}>
           <div className={styles.videoFrame}>
             <div className={styles.videoLabel}>Tu</div>
-            <video
-              ref={localVideoRef}
-              muted
-              autoPlay
-              playsInline
-              className={styles.video}
-            />
+            <video ref={localVideoRef} muted autoPlay playsInline className={styles.video} />
           </div>
 
           <div className={styles.videoFrame}>
             <div className={styles.videoLabel}>{otherLabel}</div>
-            <video
-              ref={remoteVideoRef}
-              autoPlay
-              playsInline
-              className={styles.video}
-            />
+            <video ref={remoteVideoRef} autoPlay playsInline className={styles.video} />
           </div>
         </div>
       </div>
     </div>
   );
+
+  return createPortal(node, document.body);
 }
