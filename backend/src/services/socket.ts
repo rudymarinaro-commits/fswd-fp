@@ -102,7 +102,7 @@ function touch(io: Server, userId: number) {
 
   const t = setTimeout(() => {
     setPresence(io, userId, "IDLE");
-  }, 60_000);
+  }, 30_000);
 
   idleTimers.set(userId, t);
 }
