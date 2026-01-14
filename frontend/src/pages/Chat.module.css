@@ -2,41 +2,59 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  overflow: hidden; /* ✅ IMPORTANTISSIMO: evita che scrolli la pagina intera e la navbar sparisca */
 }
 
+/* layout: 2 colonne affiancate (sidebar + main) */
 .layout {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
   display: flex;
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  gap: 0; /* ✅ così la linea divisoria torna “pulita” */
 }
 
+/* Sidebar (Lista utenti) */
 .sidebar {
   width: 320px;
-  padding: 12px;
-  border-right: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.02);
+  flex: 0 0 320px;
+  min-width: 260px;
   overflow: auto;
+
+  padding: 12px;
+
+  /* ✅ Pannello + divider */
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-right: 1px solid rgba(229, 231, 235, 0.16); /* ✅ linea divisoria */
+  border-top-left-radius: 16px;
+  border-bottom-left-radius: 16px;
+
+  /* ✅ per evitare “stacchi” strani sullo sfondo */
+  backdrop-filter: blur(10px);
 }
 
+/* Header sidebar */
 .sidebarHeader {
   margin-bottom: 10px;
 }
 
 .sidebarTitleRow {
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.92); /* ✅ titolo leggibile (“Lista utenti”) */
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
+/* lista utenti */
 .usersList {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .userItem {
@@ -46,9 +64,9 @@
 .userButton {
   width: 100%;
   text-align: left;
-  padding: 8px 10px;
+  padding: 10px 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
 }
@@ -59,7 +77,7 @@
 }
 
 .userButtonActive {
-  background: rgba(99, 102, 241, 0.12);
+  background: rgba(99, 102, 241, 0.14);
   border-color: rgba(99, 102, 241, 0.35);
 }
 
@@ -89,6 +107,7 @@
   margin-top: 4px;
 }
 
+/* presence */
 .presenceDot {
   width: 10px;
   height: 10px;
@@ -109,6 +128,7 @@
   background: #ef4444;
 }
 
+/* badge */
 .badge {
   min-width: 18px;
   height: 18px;
@@ -130,19 +150,33 @@
   background: #111827;
 }
 
+/* Main (chat) */
 .main {
   flex: 1;
-  padding: 12px;
   min-width: 0;
   display: flex;
   flex-direction: column;
+
+  padding: 12px;
+
+  /* ✅ Pannello + divider simmetrico */
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-left: none; /* ✅ il divider è già sulla sidebar */
+  border-top-right-radius: 16px;
+  border-bottom-right-radius: 16px;
+
+  overflow: hidden; /* ✅ scroll SOLO dentro scroller */
+  backdrop-filter: blur(10px);
 }
 
+/* barra sopra la chat (titolo + azioni) */
 .topBar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .title {
@@ -153,6 +187,7 @@
 .actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .error {
@@ -160,6 +195,7 @@
   margin-top: 6px;
 }
 
+/* area scroll messaggi */
 .scroller {
   flex: 1;
   min-height: 0;
@@ -228,6 +264,7 @@
   overflow-wrap: anywhere;
 }
 
+/* composer */
 .composer {
   display: flex;
   gap: 8px;
@@ -241,4 +278,42 @@
 .sidebarError {
   color: var(--danger);
   margin-top: 8px;
+}
+
+/* =========================
+   ✅ RESPONSIVE
+   ========================= */
+
+@media (max-width: 980px) {
+  .layout {
+    flex-direction: column;
+    gap: 12px; /* in verticale serve un po’ d’aria */
+  }
+
+  .sidebar {
+    width: 100%;
+    flex: 0 0 auto;
+    min-width: 0;
+
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.16);
+
+    border-top-right-radius: 16px;
+    border-bottom-left-radius: 16px;
+  }
+
+  .main {
+    border-left: 1px solid var(--border);
+    border-top-left-radius: 16px;
+  }
+}
+
+@media (max-width: 720px) {
+  .bubble {
+    max-width: 85%;
+  }
+
+  .composer {
+    flex-direction: column;
+  }
 }

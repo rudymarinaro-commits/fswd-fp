@@ -3,17 +3,38 @@
   top: 0;
   z-index: 50;
 
+  width: 100%;
+
   border-bottom: 1px solid var(--border);
+
+  /* più opaco = non “assorbe” colori diversi dietro */
+  background: rgba(17, 26, 46, 0.92);
+
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+
+  /* evita artefatti di compositing */
+  isolation: isolate;
+}
+
+/* “fade” sotto la navbar per uniformare il passaggio col background pagina */
+.bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -18px;
+  height: 18px;
+  pointer-events: none;
+
   background: linear-gradient(
     180deg,
     rgba(17, 26, 46, 0.92),
-    rgba(17, 26, 46, 0.72)
+    rgba(17, 26, 46, 0)
   );
-  backdrop-filter: blur(14px);
 }
 
-/* ✅ prima era max-width: 1100px centrato
-   ora è full-width: titolo più a sinistra e bottoni più a destra */
+/* ✅ full-width */
 .inner {
   width: 100%;
   margin: 0;
@@ -23,6 +44,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+
+  /* altezza minima fissa = ADMIN/USER uguali */
+  min-height: 72px;
 }
 
 .left {
@@ -45,6 +69,8 @@
   font-size: 16px;
   margin: 0;
 
+  line-height: 1.15;
+
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -56,6 +82,11 @@
   display: flex;
   gap: 8px;
   align-items: center;
+
+  line-height: 1.15;
+
+  /* ✅ evita micro-wrap che cambia altezza navbar */
+  flex-wrap: nowrap;
   min-width: 0;
 }
 
@@ -63,6 +94,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+
   max-width: 520px;
 }
 
@@ -77,6 +109,8 @@
   background: rgba(255, 255, 255, 0.03);
   color: rgba(229, 231, 235, 0.9);
   font-size: 12px;
+
+  flex-shrink: 0;
 }
 
 .roleAdmin {
@@ -129,6 +163,7 @@
 @media (max-width: 720px) {
   .inner {
     padding: 10px 14px;
+    min-height: 70px;
   }
 
   .userEmail {

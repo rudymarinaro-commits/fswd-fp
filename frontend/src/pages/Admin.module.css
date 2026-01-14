@@ -15,7 +15,11 @@
 }
 
 .card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.02)
+  );
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -48,7 +52,7 @@
 /* create user */
 .formGrid {
   display: grid;
-  gap: 10px;
+  gap: 16px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -76,10 +80,17 @@
 }
 
 .formActions {
-  margin-top: 12px;
   display: flex;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 12px;
   flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.formActions .small {
+  margin-left: 8px;
+  padding-bottom: 2px;
+  opacity: 0.75;
 }
 
 .msgOk {
@@ -191,4 +202,82 @@
 .unauthText {
   margin: 0;
   color: var(--muted);
+}
+
+/* =========================
+   RESPONSIVE TABLE (Admin - Lista utenti)
+   Trasforma la tabella in "cards" sotto 720px
+   ========================= */
+@media (max-width: 720px) {
+  .tableWrap {
+    overflow: visible;
+  }
+
+  .table {
+    min-width: 0; /* importante: evita overflow forzato */
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .table thead {
+    display: none; /* su mobile nascondiamo l'intestazione */
+  }
+
+  .table tbody,
+  .table .tr,
+  .table .td {
+    display: block;
+    width: 100%;
+  }
+
+  .tr {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tr:last-child {
+    border-bottom: none;
+  }
+
+  .td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: none; /* già gestito dal separatore della "card" */
+  }
+
+  /* Etichette per ogni "riga" in modalità mobile */
+  .td::before {
+    font-size: 12px;
+    color: var(--muted);
+    flex: 0 0 120px;
+  }
+
+  .tr .td:nth-child(1)::before {
+    content: "Email";
+  }
+  .tr .td:nth-child(2)::before {
+    content: "Username";
+  }
+  .tr .td:nth-child(3)::before {
+    content: "Nome";
+  }
+  .tr .td:nth-child(4)::before {
+    content: "Ruolo";
+  }
+  .tr .td:nth-child(5)::before {
+    content: "Azioni";
+  }
+
+  /* Azioni: rendi più comoda la select + bottone */
+  .actionRow {
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .roleSelect {
+    width: 100%;
+    max-width: 220px;
+  }
 }

@@ -4,6 +4,7 @@ import { apiFetch } from "../services/api";
 import type { Role, User } from "../types/api";
 import Navbar from "../components/Navbar";
 import styles from "./Admin.module.css";
+import { UI_TEXT } from "../constants/uiText";
 
 type CreateUserPayload = {
   email: string;
@@ -86,7 +87,9 @@ export default function Admin() {
     const q = search.trim().toLowerCase();
     if (!q) return users;
     return users.filter((u) => {
-      const hay = `${u.email} ${u.username ?? ""} ${u.firstName ?? ""} ${u.lastName ?? ""}`.toLowerCase();
+      const hay = `${u.email} ${u.username ?? ""} ${u.firstName ?? ""} ${
+        u.lastName ?? ""
+      }`.toLowerCase();
       return hay.includes(q);
     });
   }, [users, search]);
@@ -111,7 +114,13 @@ export default function Admin() {
       avatarUrl: normalize(cAvatarUrl),
     };
 
-    if (!payload.email || !payload.password || !payload.firstName || !payload.lastName || !payload.username) {
+    if (
+      !payload.email ||
+      !payload.password ||
+      !payload.firstName ||
+      !payload.lastName ||
+      !payload.username
+    ) {
       setCreateMsg("❌ Compila: Email, Password, Nome, Cognome e Username.");
       return;
     }
@@ -209,7 +218,9 @@ export default function Admin() {
         return;
       }
 
-      const ok = window.confirm(`Eliminare l'utente "${target.email}"? Questa azione è irreversibile.`);
+      const ok = window.confirm(
+        `Eliminare l'utente "${target.email}"? Questa azione è irreversibile.`
+      );
       if (!ok) return;
 
       setMsg(null);
@@ -217,7 +228,11 @@ export default function Admin() {
       setDeletingId(target.id);
 
       try {
-        await apiFetch<unknown>(`/admin/users/${target.id}`, { method: "DELETE" }, token);
+        await apiFetch<unknown>(
+          `/admin/users/${target.id}`,
+          { method: "DELETE" },
+          token
+        );
         setUsers((prev) => prev.filter((u) => u.id !== target.id));
         setMsg("✅ Utente eliminato");
       } catch (e) {
@@ -234,24 +249,34 @@ export default function Admin() {
 
   return (
     <div className={styles.page}>
-      <Navbar title="Admin" active="admin" />
+      <Navbar title={UI_TEXT.adminTitle} active="admin" />
 
       <div className={styles.content}>
         {!user || !canSee ? (
           <div className={styles.unauth}>
-            <p className={styles.unauthText}>Accesso non autorizzato. Questa pagina è solo per Admin.</p>
+            <p className={styles.unauthText}>
+              Accesso non autorizzato. Questa pagina è solo per Admin.
+            </p>
           </div>
         ) : (
           <div className={styles.container}>
             <div className={styles.card}>
               <h2 className={styles.sectionTitle}>Crea utente</h2>
 
-              {createMsg && <div className={isCreateOk ? styles.msgOk : styles.msgErr}>{createMsg}</div>}
+              {createMsg && (
+                <div className={isCreateOk ? styles.msgOk : styles.msgErr}>
+                  {createMsg}
+                </div>
+              )}
 
               <div className={styles.formGrid} style={{ marginTop: 10 }}>
                 <label className={styles.label}>
                   Email (univoca)
-                  <input value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="user2@example.com" />
+                  <input
+                    value={cEmail}
+                    onChange={(e) => setCEmail(e.target.value)}
+                    placeholder="user2@example.com"
+                  />
                 </label>
 
                 <label className={styles.label}>
@@ -280,37 +305,65 @@ export default function Admin() {
 
                 <label className={styles.label}>
                   Nome
-                  <input value={cFirstName} onChange={(e) => setCFirstName(e.target.value)} placeholder="Mario" />
+                  <input
+                    value={cFirstName}
+                    onChange={(e) => setCFirstName(e.target.value)}
+                    placeholder="Mario"
+                  />
                 </label>
 
                 <label className={styles.label}>
                   Cognome
-                  <input value={cLastName} onChange={(e) => setCLastName(e.target.value)} placeholder="Rossi" />
+                  <input
+                    value={cLastName}
+                    onChange={(e) => setCLastName(e.target.value)}
+                    placeholder="Rossi"
+                  />
                 </label>
 
                 <label className={styles.label}>
                   Username (non univoco)
-                  <input value={cUsername} onChange={(e) => setCUsername(e.target.value)} placeholder="mario" />
+                  <input
+                    value={cUsername}
+                    onChange={(e) => setCUsername(e.target.value)}
+                    placeholder="mario"
+                  />
                 </label>
 
                 <label className={styles.label}>
                   Telefono (facoltativo)
-                  <input value={cPhone} onChange={(e) => setCPhone(e.target.value)} placeholder="+39 333 0000000" />
+                  <input
+                    value={cPhone}
+                    onChange={(e) => setCPhone(e.target.value)}
+                    placeholder="+39 333 0000000"
+                  />
                 </label>
 
                 <label className={styles.label}>
                   Indirizzo (facoltativo)
-                  <input value={cAddress} onChange={(e) => setCAddress(e.target.value)} placeholder="Via Roma 1, Milano" />
+                  <input
+                    value={cAddress}
+                    onChange={(e) => setCAddress(e.target.value)}
+                    placeholder="Via Roma 1, Milano"
+                  />
                 </label>
 
                 <label className={`${styles.label} ${styles.full}`}>
                   Immagine profilo (URL facoltativo)
-                  <input value={cAvatarUrl} onChange={(e) => setCAvatarUrl(e.target.value)} placeholder="https://..." />
+                  <input
+                    value={cAvatarUrl}
+                    onChange={(e) => setCAvatarUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
                 </label>
               </div>
 
               <div className={styles.formActions}>
-                <button type="button" onClick={() => void createUser()} disabled={creating}>
+                <button
+                  type="button"
+                  onClick={() => void createUser()}
+                  disabled={creating}
+                >
                   {creating ? "Creazione..." : "Crea utente"}
                 </button>
 
@@ -333,12 +386,14 @@ export default function Admin() {
                   Pulisci
                 </button>
 
-                <span className={styles.small}>Required: email, password, firstName, lastName, username</span>
+                <span className={styles.small}>
+                  Required: email, password, firstName, lastName, username
+                </span>
               </div>
 
               <hr className={styles.divider} />
 
-              <h2 className={styles.sectionTitle}>Gestione utenti</h2>
+              <h2 className={styles.sectionTitle}>{UI_TEXT.adminUsersTitle}</h2>
 
               <div className={styles.row}>
                 <input
@@ -347,7 +402,11 @@ export default function Admin() {
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Cerca per email / username / nome..."
                 />
-                <button type="button" onClick={() => void loadUsers()} disabled={loading}>
+                <button
+                  type="button"
+                  onClick={() => void loadUsers()}
+                  disabled={loading}
+                >
                   {loading ? "Aggiorno..." : "Ricarica"}
                 </button>
               </div>
@@ -374,15 +433,19 @@ export default function Admin() {
                           <td className={styles.td}>{u.email}</td>
                           <td className={styles.td}>{u.username ?? "—"}</td>
                           <td className={styles.td}>
-                            {(u.firstName || u.lastName)
-                              ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()
+                            {u.firstName || u.lastName
+                              ? `${u.firstName ?? ""} ${
+                                  u.lastName ?? ""
+                                }`.trim()
                               : "—"}
                           </td>
 
                           <td className={styles.td}>
                             <span
                               className={`${styles.roleBadge} ${
-                                u.role === "ADMIN" ? styles.roleAdmin : styles.roleUser
+                                u.role === "ADMIN"
+                                  ? styles.roleAdmin
+                                  : styles.roleUser
                               }`}
                             >
                               {u.role}
@@ -410,13 +473,25 @@ export default function Admin() {
                                 className={styles.dangerMini}
                                 onClick={() => void deleteUser(u)}
                                 disabled={isMe || busy}
-                                title={isMe ? "Non puoi eliminare il tuo utente" : "Elimina utente"}
+                                title={
+                                  isMe
+                                    ? "Non puoi eliminare il tuo utente"
+                                    : "Elimina utente"
+                                }
                               >
                                 {deletingId === u.id ? "Elimino..." : "Elimina"}
                               </button>
 
-                              {isMe && <span className={styles.small}>(il tuo utente non è modificabile)</span>}
-                              {savingId === u.id && <span className={styles.small}>Salvataggio...</span>}
+                              {isMe && (
+                                <span className={styles.small}>
+                                  (il tuo utente non è modificabile)
+                                </span>
+                              )}
+                              {savingId === u.id && (
+                                <span className={styles.small}>
+                                  Salvataggio...
+                                </span>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -426,7 +501,9 @@ export default function Admin() {
                     {filtered.length === 0 && (
                       <tr>
                         <td className={styles.td} colSpan={5}>
-                          <span className={styles.small}>Nessun utente trovato</span>
+                          <span className={styles.small}>
+                            Nessun utente trovato
+                          </span>
                         </td>
                       </tr>
                     )}
@@ -437,7 +514,11 @@ export default function Admin() {
               <div className={styles.footer}>
                 {loading && <div className={styles.small}>Caricamento...</div>}
                 {err && <div className={styles.msgErr}>{err}</div>}
-                {msg && <div className={isOk ? styles.msgOk : styles.msgErr}>{msg}</div>}
+                {msg && (
+                  <div className={isOk ? styles.msgOk : styles.msgErr}>
+                    {msg}
+                  </div>
+                )}
               </div>
             </div>
           </div>
