@@ -84,7 +84,7 @@ async function main() {
     skipDuplicates: true,
   });
 
-  console.log("✅ Seed completato");
+  console.log("Seed completato");
   console.log({
     admin: { email: adminEmail, password: adminPassword },
     user: { email: userEmail, password: userPassword },
@@ -94,7 +94,7 @@ async function main() {
 
 main()
   .catch((err) => {
-    console.error("❌ Seed error:", err);
+    console.error("Seed error:", err);
     process.exit(1);
   })
   .finally(async () => {

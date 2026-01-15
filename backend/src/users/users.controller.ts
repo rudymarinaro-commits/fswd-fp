@@ -71,7 +71,7 @@ export async function getMe(req: AuthRequest, res: Response) {
 }
 
 /**
- * PATCH /api/users/me
+ * /api/users/me
  * Update profilo esteso + cambio password (con currentPassword)
  */
 export async function updateMe(req: AuthRequest, res: Response) {
@@ -84,7 +84,8 @@ export async function updateMe(req: AuthRequest, res: Response) {
     // Email (univoca)
     if (typeof body.email === "string") {
       const email = body.email.trim().toLowerCase();
-      if (!email) return res.status(400).json({ message: "Email non può essere vuota" });
+      if (!email)
+        return res.status(400).json({ message: "Email non può essere vuota" });
 
       if (email !== req.user.email) {
         const exists = await prisma.user.findUnique({ where: { email } });
@@ -98,19 +99,28 @@ export async function updateMe(req: AuthRequest, res: Response) {
     // Nome/Cognome/Username (traccia)
     if (typeof body.firstName === "string") {
       const v = body.firstName.trim();
-      if (!v) return res.status(400).json({ message: "Il nome non può essere vuoto" });
+      if (!v)
+        return res
+          .status(400)
+          .json({ message: "Il nome non può essere vuoto" });
       data.firstName = v;
     }
 
     if (typeof body.lastName === "string") {
       const v = body.lastName.trim();
-      if (!v) return res.status(400).json({ message: "il cognome non può essere vuoto" });
+      if (!v)
+        return res
+          .status(400)
+          .json({ message: "il cognome non può essere vuoto" });
       data.lastName = v;
     }
 
     if (typeof body.username === "string") {
       const v = body.username.trim();
-      if (!v) return res.status(400).json({ message: "username non può essere vuoto" });
+      if (!v)
+        return res
+          .status(400)
+          .json({ message: "username non può essere vuoto" });
       data.username = v; // non univoco
     }
 
@@ -135,21 +145,30 @@ export async function updateMe(req: AuthRequest, res: Response) {
       body.newPassword !== undefined || body.currentPassword !== undefined;
 
     if (wantsPasswordChange) {
-      if (typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
+      if (
+        typeof body.currentPassword !== "string" ||
+        typeof body.newPassword !== "string"
+      ) {
         return res.status(400).json({
-          message: "Per cambiare la password attuale per favore provvedere nuova password",
+          message:
+            "Per cambiare la password attuale per favore provvedere nuova password",
         });
       }
 
       if (body.newPassword.length < 6) {
-        return res.status(400).json({ message: "New Password almeno 6 caratteri" });
+        return res
+          .status(400)
+          .json({ message: "New Password almeno 6 caratteri" });
       }
 
-      const fresh = await prisma.user.findUnique({ where: { id: req.user.id } });
+      const fresh = await prisma.user.findUnique({
+        where: { id: req.user.id },
+      });
       if (!fresh) return res.status(404).json({ message: "User not found" });
 
       const ok = await bcrypt.compare(body.currentPassword, fresh.passwordHash);
-      if (!ok) return res.status(401).json({ message: "Password attuale è errata" });
+      if (!ok)
+        return res.status(401).json({ message: "Password attuale è errata" });
 
       data.passwordHash = await bcrypt.hash(body.newPassword, 10);
     }

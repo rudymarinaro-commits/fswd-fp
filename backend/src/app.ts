@@ -22,7 +22,7 @@ app.use("/api/rooms", roomsRoutes);
 app.use("/api", messagesRoutes);
 app.use("/api/admin", adminRoutes);
 
-// ✅ Global error handler (ultima middleware)
+// Global error handler (ultima middleware)
 app.use(errorHandler);
 
 export default app;

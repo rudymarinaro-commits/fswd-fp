@@ -4,7 +4,7 @@ import App from "./App";
 import { AuthProvider } from "./contexts/AuthProvider";
 import { SocketProvider } from "./contexts/SocketProvider";
 
-import "./index.css"; // ✅ IMPORT GLOBALE
+import "./index.css"; // IMPORT GLOBALE
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -15,4 +15,3 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </AuthProvider>
   </React.StrictMode>
 );
-

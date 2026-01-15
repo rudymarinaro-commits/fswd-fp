@@ -34,7 +34,7 @@
   );
 }
 
-/* ✅ full-width */
+/* full-width */
 .inner {
   width: 100%;
   margin: 0;
@@ -85,7 +85,7 @@
 
   line-height: 1.15;
 
-  /* ✅ evita micro-wrap che cambia altezza navbar */
+  /* evita micro-wrap che cambia altezza navbar */
   flex-wrap: nowrap;
   min-width: 0;
 }

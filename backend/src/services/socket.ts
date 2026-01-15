@@ -317,7 +317,7 @@ export function setupSocket(io: Server) {
 
           const out: OfferOut = { roomId, fromUserId: userId, sdp: p.sdp };
 
-          // ✅ FIX: NO DUPLICATI (prima c'era anche socket.to(room).emit)
+          // NO DUPLICATI (prima c'era anche socket.to(room).emit)
           const delivered = emitToUser(io, otherUserId, "webrtc:offer", out);
 
           // eslint-disable-next-line no-console
@@ -361,7 +361,7 @@ export function setupSocket(io: Server) {
 
           const out: AnswerOut = { roomId, fromUserId: userId, sdp: p.sdp };
 
-          // ✅ FIX: NO DUPLICATI
+          // FIX: NO DUPLICATI
           emitToUser(io, otherUserId, "webrtc:answer", out);
 
           ack?.({ ok: true });
@@ -404,7 +404,7 @@ export function setupSocket(io: Server) {
             candidate: p.candidate,
           };
 
-          // ✅ FIX: NO DUPLICATI
+          // FIX: NO DUPLICATI
           emitToUser(io, otherUserId, "webrtc:ice", out);
 
           ack?.({ ok: true });
@@ -441,7 +441,7 @@ export function setupSocket(io: Server) {
 
           const out: HangupOut = { roomId, fromUserId: userId };
 
-          // ✅ FIX: NO DUPLICATI
+          // FIX: NO DUPLICATI
           emitToUser(io, otherUserId, "webrtc:hangup", out);
 
           ack?.({ ok: true });
