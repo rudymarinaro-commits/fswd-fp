@@ -13,7 +13,7 @@ model User {
   passwordHash String
   role         Role   @default(USER)
 
-  // ✅ Profilo esteso (punto 4 traccia)
+  // Profilo esteso (punto 4 traccia)
   firstName String  @default("")
   lastName  String  @default("")
   username  String  @default("") // NON univoco (come da traccia)
@@ -43,7 +43,7 @@ model Room {
 
   messages Message[]
 
-  // ✅ DM univoca (coppia normalizzata)
+  // DM univoca (coppia normalizzata)
   @@unique([user1Id, user2Id])
   @@index([user1Id])
   @@index([user2Id])

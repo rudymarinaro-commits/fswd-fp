@@ -61,17 +61,22 @@ export async function createUser(req: Request, res: Response) {
   try {
     const body = (req.body ?? {}) as any;
 
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const email =
+      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
     const role = body.role === "ADMIN" ? "ADMIN" : "USER";
 
-    const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
-    const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
-    const username = typeof body.username === "string" ? body.username.trim() : "";
+    const firstName =
+      typeof body.firstName === "string" ? body.firstName.trim() : "";
+    const lastName =
+      typeof body.lastName === "string" ? body.lastName.trim() : "";
+    const username =
+      typeof body.username === "string" ? body.username.trim() : "";
 
     const phone = typeof body.phone === "string" ? body.phone.trim() : "";
     const address = typeof body.address === "string" ? body.address.trim() : "";
-    const avatarUrl = typeof body.avatarUrl === "string" ? body.avatarUrl.trim() : "";
+    const avatarUrl =
+      typeof body.avatarUrl === "string" ? body.avatarUrl.trim() : "";
 
     if (!email || !password || !firstName || !lastName || !username) {
       return res.status(400).json({
@@ -80,11 +85,14 @@ export async function createUser(req: Request, res: Response) {
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ message: "password must be at least 6 chars" });
+      return res
+        .status(400)
+        .json({ message: "password must be at least 6 chars" });
     }
 
     const exists = await prisma.user.findUnique({ where: { email } });
-    if (exists) return res.status(409).json({ message: "Email already in use" });
+    if (exists)
+      return res.status(409).json({ message: "Email already in use" });
 
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -113,20 +121,22 @@ export async function createUser(req: Request, res: Response) {
 }
 
 /**
- * PATCH /api/admin/users/:id
- * (opzionale) update profilo + reset password
+ * /api/admin/users/:id
+ * update profilo + reset password
  */
 export async function updateUser(req: Request, res: Response) {
   try {
     const id = Number(req.params.id);
-    if (!id || Number.isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+    if (!id || Number.isNaN(id))
+      return res.status(400).json({ message: "Invalid id" });
 
     const body = (req.body ?? {}) as any;
     const data: any = {};
 
     if (typeof body.email === "string") {
       const email = body.email.trim().toLowerCase();
-      if (!email) return res.status(400).json({ message: "Email cannot be empty" });
+      if (!email)
+        return res.status(400).json({ message: "Email cannot be empty" });
       const exists = await prisma.user.findUnique({ where: { email } });
       if (exists && exists.id !== id) {
         return res.status(409).json({ message: "Email already in use" });
@@ -140,27 +150,34 @@ export async function updateUser(req: Request, res: Response) {
 
     if (typeof body.firstName === "string") {
       const v = body.firstName.trim();
-      if (!v) return res.status(400).json({ message: "firstName cannot be empty" });
+      if (!v)
+        return res.status(400).json({ message: "firstName cannot be empty" });
       data.firstName = v;
     }
     if (typeof body.lastName === "string") {
       const v = body.lastName.trim();
-      if (!v) return res.status(400).json({ message: "lastName cannot be empty" });
+      if (!v)
+        return res.status(400).json({ message: "lastName cannot be empty" });
       data.lastName = v;
     }
     if (typeof body.username === "string") {
       const v = body.username.trim();
-      if (!v) return res.status(400).json({ message: "username cannot be empty" });
+      if (!v)
+        return res.status(400).json({ message: "username cannot be empty" });
       data.username = v; // NON univoco
     }
 
     if (typeof body.phone === "string") data.phone = body.phone.trim() || null;
-    if (typeof body.address === "string") data.address = body.address.trim() || null;
-    if (typeof body.avatarUrl === "string") data.avatarUrl = body.avatarUrl.trim() || null;
+    if (typeof body.address === "string")
+      data.address = body.address.trim() || null;
+    if (typeof body.avatarUrl === "string")
+      data.avatarUrl = body.avatarUrl.trim() || null;
 
     if (typeof body.password === "string") {
       if (body.password.length < 6) {
-        return res.status(400).json({ message: "password must be at least 6 chars" });
+        return res
+          .status(400)
+          .json({ message: "password must be at least 6 chars" });
       }
       data.passwordHash = await bcrypt.hash(body.password, 10);
     }
@@ -188,7 +205,8 @@ export async function deleteUser(req: AuthRequest, res: Response) {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
     const id = Number(req.params.id);
-    if (!id || Number.isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+    if (!id || Number.isNaN(id))
+      return res.status(400).json({ message: "Invalid id" });
 
     if (id === req.user.id) {
       return res.status(400).json({ message: "You cannot delete yourself" });

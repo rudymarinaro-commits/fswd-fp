@@ -2,7 +2,7 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* ✅ IMPORTANTISSIMO: evita che scrolli la pagina intera e la navbar sparisca */
+  overflow: hidden; /* IMPORTANTISSIMO: evita che scrolli la pagina intera e la navbar sparisca */
 }
 
 /* layout: 2 colonne affiancate (sidebar + main) */
@@ -11,7 +11,7 @@
   height: 100%;
   min-height: 0;
   padding: 16px;
-  gap: 0; /* ✅ così la linea divisoria torna “pulita” */
+  gap: 0;
 }
 
 /* Sidebar (Lista utenti) */
@@ -23,14 +23,14 @@
 
   padding: 12px;
 
-  /* ✅ Pannello + divider */
+  /* Pannello + divider */
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border);
-  border-right: 1px solid rgba(229, 231, 235, 0.16); /* ✅ linea divisoria */
+  border-right: 1px solid rgba(229, 231, 235, 0.16); /* linea divisoria */
   border-top-left-radius: 16px;
   border-bottom-left-radius: 16px;
 
-  /* ✅ per evitare “stacchi” strani sullo sfondo */
+  /* per evitare “stacchi” strani sullo sfondo */
   backdrop-filter: blur(10px);
 }
 
@@ -42,7 +42,7 @@
 .sidebarTitleRow {
   font-weight: 800;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.92); /* ✅ titolo leggibile (“Lista utenti”) */
+  color: rgba(255, 255, 255, 0.92); /* titolo leggibile (“Lista utenti”) */
   display: flex;
   align-items: center;
   gap: 8px;
@@ -159,14 +159,14 @@
 
   padding: 12px;
 
-  /* ✅ Pannello + divider simmetrico */
+  /* Pannello + divider simmetrico */
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border);
-  border-left: none; /* ✅ il divider è già sulla sidebar */
+  border-left: none; /* il divider è già sulla sidebar */
   border-top-right-radius: 16px;
   border-bottom-right-radius: 16px;
 
-  overflow: hidden; /* ✅ scroll SOLO dentro scroller */
+  overflow: hidden; /* scroll SOLO dentro scroller */
   backdrop-filter: blur(10px);
 }
 
@@ -281,7 +281,7 @@
 }
 
 /* =========================
-   ✅ RESPONSIVE
+   RESPONSIVE
    ========================= */
 
 @media (max-width: 980px) {

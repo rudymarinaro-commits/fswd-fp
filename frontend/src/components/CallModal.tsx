@@ -45,7 +45,9 @@ export default function CallModal({
   incomingOffer,
   onClose,
 }: Props) {
-  const [phase, setPhase] = useState<Phase>(role === "caller" ? "CALLING" : "RINGING");
+  const [phase, setPhase] = useState<Phase>(
+    role === "caller" ? "CALLING" : "RINGING"
+  );
   const [error, setError] = useState<string | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -54,7 +56,9 @@ export default function CallModal({
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  const otherLabel = otherUser ? otherUser.email || `User #${otherUser.id}` : "altro utente";
+  const otherLabel = otherUser
+    ? otherUser.email || `User #${otherUser.id}`
+    : "altro utente";
 
   const rtcConfig = useMemo<RTCConfiguration>(
     () => ({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }),
@@ -101,7 +105,9 @@ export default function CallModal({
     setError(null);
 
     if (!localStreamRef.current) {
-      const stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      const stream = await navigator.mediaDevices.getUserMedia(
+        mediaConstraints
+      );
       localStreamRef.current = stream;
 
       if (localVideoRef.current) {
@@ -168,7 +174,8 @@ export default function CallModal({
 
       setPhase("IN_CALL");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Errore accettazione chiamata";
+      const msg =
+        e instanceof Error ? e.message : "Errore accettazione chiamata";
       setError(msg);
     }
   }, [ensureMediaAndPc, incomingOffer?.sdp, roomId, socket]);
@@ -240,7 +247,10 @@ export default function CallModal({
     return () => cleanup();
   }, [cleanup]);
 
-  const title = role === "caller" ? `Video call a ${otherLabel}` : `Video call da ${otherLabel}`;
+  const title =
+    role === "caller"
+      ? `Video call a ${otherLabel}`
+      : `Video call da ${otherLabel}`;
 
   const phaseLabel =
     phase === "CALLING"
@@ -266,7 +276,7 @@ export default function CallModal({
       role="dialog"
       aria-modal="true"
       onMouseDown={(e) => {
-        // chiudi cliccando fuori (opzionale ma comodo)
+        // chiudi cliccando fuori
         if (e.target === e.currentTarget) onClose();
       }}
     >
@@ -299,11 +309,19 @@ export default function CallModal({
                 </button>
               )}
 
-              <button type="button" onClick={hangup} className={`${styles.btn} ${styles.btnDanger}`}>
+              <button
+                type="button"
+                onClick={hangup}
+                className={`${styles.btn} ${styles.btnDanger}`}
+              >
                 Riaggancia
               </button>
 
-              <button type="button" onClick={onClose} className={`${styles.btn} ${styles.btnGhost}`}>
+              <button
+                type="button"
+                onClick={onClose}
+                className={`${styles.btn} ${styles.btnGhost}`}
+              >
                 Chiudi
               </button>
             </div>
@@ -313,12 +331,23 @@ export default function CallModal({
         <div className={styles.videos}>
           <div className={styles.videoFrame}>
             <div className={styles.videoLabel}>Tu</div>
-            <video ref={localVideoRef} muted autoPlay playsInline className={styles.video} />
+            <video
+              ref={localVideoRef}
+              muted
+              autoPlay
+              playsInline
+              className={styles.video}
+            />
           </div>
 
           <div className={styles.videoFrame}>
             <div className={styles.videoLabel}>{otherLabel}</div>
-            <video ref={remoteVideoRef} autoPlay playsInline className={styles.video} />
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className={styles.video}
+            />
           </div>
         </div>
       </div>

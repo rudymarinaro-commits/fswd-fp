@@ -49,12 +49,12 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
 
-  /* ✅ fallback solido sotto lo sfondo */
+  /* fallback solido sotto lo sfondo */
   background: var(--bg);
   color: var(--text);
 }
 
-/* ✅ Background globale FIXED (anti-bande / anti-stacchi) */
+/* Background globale FIXED (anti-bande / anti-stacchi) */
 body::before {
   content: "";
   position: fixed;
@@ -76,7 +76,7 @@ body::before {
   background-repeat: no-repeat;
   background-size: cover;
 
-  /* ✅ riduce glitch di rendering (blur + scroll su Chrome) */
+  /* riduce glitch di rendering (blur + scroll su Chrome) */
   transform: translateZ(0);
 }
 
